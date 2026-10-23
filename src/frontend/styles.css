@@ -1,0 +1,30 @@
+:root { font-family: system-ui, sans-serif; color: #172033; background: #f4f6f8; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 1050px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+header { margin-bottom: 1.5rem; }
+h1 { margin: 0; font-size: clamp(2rem, 5vw, 3rem); }
+header p { margin: .35rem 0 0; color: #526071; }
+.search-form { display: grid; grid-template-columns: 2fr repeat(4, 1fr) auto; gap: .75rem; align-items: end; padding: 1rem; background: white; border-radius: .75rem; box-shadow: 0 2px 12px #17203312; }
+label { display: grid; gap: .35rem; font-size: .8rem; color: #526071; }
+input { width: 100%; border: 1px solid #ccd4df; border-radius: .4rem; padding: .65rem; font: inherit; color: inherit; }
+button { border: 0; border-radius: .4rem; padding: .7rem 1rem; font: inherit; cursor: pointer; color: white; background: #1e5eff; }
+button:disabled { opacity: .45; cursor: default; }
+.results { display: grid; gap: .75rem; }
+.assembly-card, .detail { width: 100%; text-align: left; background: white; color: inherit; box-shadow: 0 2px 12px #17203312; }
+.assembly-card { padding: 1.1rem; transition: transform .15s; }
+.assembly-card:hover { transform: translateY(-2px); }
+.assembly-card h2, .detail h2 { margin: .35rem 0; font-size: 1.15rem; }
+.assembly-card p { margin: .3rem 0 0; color: #526071; }
+.card-date, .result-count { color: #526071; font-size: .9rem; }
+.tag { display: inline-block; margin-top: .65rem; padding: .2rem .5rem; border-radius: 999px; background: #e5edff; color: #1749c7; font-size: .75rem; }
+.pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 1.5rem; }
+.back { margin-bottom: 1rem; background: #526071; }
+.detail { padding: 1.5rem; }
+dl { display: grid; grid-template-columns: minmax(10rem, 1fr) 2fr; gap: .5rem; margin: 1.5rem 0; }
+dt { color: #526071; } dd { margin: 0; }
+.notice { padding: .75rem; background: #fff7db; border-radius: .4rem; }
+.history { padding-left: 1.25rem; }
+pre { overflow-x: auto; padding: .75rem; background: #f4f6f8; border-radius: .4rem; font-size: .8rem; }
+.error { padding: .75rem; color: #9b1c1c; background: #fde8e8; border-radius: .4rem; }
+@media (max-width: 800px) { .search-form { grid-template-columns: repeat(2, 1fr); } .search-form label:first-child { grid-column: 1 / -1; } .search-form button { grid-column: 1 / -1; } }
