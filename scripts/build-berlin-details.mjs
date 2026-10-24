@@ -3,7 +3,8 @@
 //
 // Sources
 //   Ortsteile: ALKIS Berlin Ortsteile (Geoportal Berlin, Datenlizenz Deutschland - Zero - Version 2.0), WFS as GeoJSON
-//   Roads:     OpenStreetMap via Overpass (motorway, trunk, primary), (c) OpenStreetMap contributors, ODbL
+//   Roads:     OpenStreetMap via Overpass (motorway, trunk, primary, secondary), (c) OpenStreetMap contributors, ODbL
+//              classes: Autobahn, Bundesstrasse (ref "B ..."), other main road, connecting road (secondary)
 //
 // Usage: node scripts/build-berlin-details.mjs [--ortsteile file-or-url] [--roads file-or-url]
 import { readFile, writeFile } from 'node:fs/promises';
@@ -13,10 +14,12 @@ import { districtAt } from '../src/frontend/mapgeo.js';
 
 const ORTSTEILE_URL = 'https://gdi.berlin.de/services/wfs/alkis_ortsteile?service=WFS&version=2.0.0&request=GetFeature&typeNames=alkis_ortsteile:ortsteile&outputFormat=application/json&srsName=EPSG:4326';
 const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
-const QUERY = '[out:json][timeout:120];area["name"="Berlin"]["boundary"="administrative"]["admin_level"="4"]->.a;way(area.a)["highway"~"^(motorway|trunk|primary)$"];out geom tags;';
+const QUERY = '[out:json][timeout:120];area["name"="Berlin"]["boundary"="administrative"]["admin_level"="4"]->.a;way(area.a)["highway"~"^(motorway|trunk|primary|secondary)$"];out geom tags;';
 const TOLERANCE_ORTSTEIL = 0.00025; // degrees, about 20 to 30 m
 const TOLERANCE_ROAD = 0.0005;
-const MAX_LABELS = 70;
+const MAX_LABELS = 90;
+// Longer roads of the higher classes win when the labels are chosen.
+const LABEL_WEIGHT = { motorway: 3, federal: 2.5, main: 2, connector: 1 };
 
 const args = process.argv.slice(2);
 const option = (name) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : null; };
@@ -128,18 +131,24 @@ if (unassigned.length) console.warn(`Ortsteile ohne Bezirk: ${unassigned.join(',
 
 // ---------- Roads ----------
 const roadsJson = await load(option('roads'), fetchRoads);
-const raw = { motorway: [], trunk: [], primary: [] };
+const raw = { motorway: [], federal: [], main: [], connector: [] };
+
+// Autobahn; Bundesstrasse = any of the other classes with a reference "B ..."; other trunk and primary roads; secondary roads.
+function classify(tags) {
+  if (tags.highway === 'motorway') return 'motorway';
+  if (/(^|;)\s*B\s*\d+/.test(tags.ref ?? '')) return 'federal';
+  return tags.highway === 'secondary' ? 'connector' : 'main';
+}
 const groups = new Map(); // label -> { kind, length, best: { length, points } }
 const lengthOf = (points) => points.slice(1).reduce((sum, [x, y], i) => sum + Math.hypot(x - points[i][0], y - points[i][1]), 0);
 
 for (const way of roadsJson.elements.filter((element) => element.type === 'way' && element.geometry?.length > 1)) {
-  const kind = way.tags.highway;
-  if (!raw[kind]) continue;
+  const kind = classify(way.tags);
   const coordinates = way.geometry.map((node) => [node.lon, node.lat]);
   raw[kind].push(coordinates);
   const points = simplify(coordinates, TOLERANCE_ROAD).map(project);
   if (points.length < 2) continue;
-  const text = kind === 'motorway' ? (way.tags.ref ?? '').split(';')[0].replace(/\s+/g, '') : way.tags.name;
+  const text = kind === 'motorway' ? (way.tags.ref ?? '').split(';')[0].replace(/\s+/g, '') : (way.tags.name ?? (way.tags.ref ?? '').split(';')[0]);
   if (!text) continue;
   const length = lengthOf(points);
   const group = groups.get(text) ?? { text, kind, length: 0, best: { length: 0, points: null } };
@@ -199,23 +208,23 @@ function labelFor(group) {
       let angle = (Math.atan2(y1 - y0, x1 - x0) * 180) / Math.PI;
       if (angle > 90) angle -= 180;
       if (angle < -90) angle += 180;
-      return { text: group.text, kind: group.kind === 'motorway' ? 'motorway' : 'road', x: round(x0 + t * (x1 - x0)), y: round(y0 + t * (y1 - y0)), angle: Math.round(angle) };
+      return { text: group.text, kind: group.kind, x: round(x0 + t * (x1 - x0)), y: round(y0 + t * (y1 - y0)), angle: Math.round(angle) };
     }
     walked += segment;
   }
   return null;
 }
 
-const labels = [...groups.values()].sort((a, b) => b.length - a.length).slice(0, MAX_LABELS).map(labelFor).filter(Boolean);
+const labels = [...groups.values()].sort((a, b) => b.length * LABEL_WEIGHT[b.kind] - a.length * LABEL_WEIGHT[a.kind]).slice(0, MAX_LABELS).map(labelFor).filter(Boolean);
 
 const module = {
-  source: 'Ortsteile: ALKIS Berlin Ortsteile, Geoportal Berlin, Datenlizenz Deutschland - Zero - Version 2.0. Strassen: (c) OpenStreetMap-Mitwirkende, ODbL.',
+  source: 'Ortsteile: ALKIS Berlin Ortsteile, Geoportal Berlin, Datenlizenz Deutschland - Zero - Version 2.0. Strassen: (c) OpenStreetMap-Mitwirkende, ODbL. Klassen: motorway (Autobahn), federal (Bundesstrasse), main (Hauptstrasse), connector (Verbindungsstrasse).',
   ortsteile,
-  roads: { motorway: kinds.motorway.join(''), trunk: kinds.trunk.join(''), primary: kinds.primary.join('') },
+  roads: Object.fromEntries(Object.entries(kinds).map(([kind, paths]) => [kind, paths.join('')])),
   labels,
 };
 
 const target = fileURLToPath(new URL('../src/frontend/berlin-details.js', import.meta.url));
 await writeFile(target, `// Generated by scripts/build-berlin-details.mjs, do not edit.\n// Road data (c) OpenStreetMap contributors, ODbL. Ortsteile: Geoportal Berlin, Datenlizenz Deutschland - Zero - Version 2.0.\nexport default ${JSON.stringify(module)};\n`);
 const size = JSON.stringify(module).length;
-console.log(`${ortsteile.length} Ortsteile, Strassen: ${kinds.motorway.length} Autobahn-, ${kinds.trunk.length} Fern-, ${kinds.primary.length} Hauptstrassenlinien, ${labels.length} Beschriftungen, ${(size / 1024).toFixed(1)} KB -> src/frontend/berlin-details.js`);
+console.log(`${ortsteile.length} Ortsteile, Strassen: ${kinds.motorway.length} Autobahn-, ${kinds.federal.length} Bundesstrassen-, ${kinds.main.length} Hauptstrassen-, ${kinds.connector.length} Verbindungsstrassenlinien, ${labels.length} Beschriftungen, ${(size / 1024).toFixed(1)} KB -> src/frontend/berlin-details.js`);

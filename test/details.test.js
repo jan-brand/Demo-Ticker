@@ -19,9 +19,13 @@ test('the data set is complete and consistent', () => {
     assert.ok(parseRings(ortsteil.d).every((ring) => ring.length >= 3));
   }
   assert.equal(new Set(details.ortsteile.map((o) => o.name)).size, details.ortsteile.length);
-  for (const kind of ['motorway', 'trunk', 'primary']) assert.ok(details.roads[kind].startsWith('M'), kind);
+  assert.deepEqual(Object.keys(details.roads).sort(), ['connector', 'federal', 'main', 'motorway']);
+  for (const kind of Object.keys(details.roads)) assert.ok(details.roads[kind].startsWith('M'), kind);
   assert.ok(details.labels.some((label) => label.text === 'A100' && label.kind === 'motorway'));
   assert.ok(details.labels.length > 20 && details.labels.every((l) => Math.abs(l.angle) <= 90 && l.x > 0 && l.y > 0));
+  const kinds = new Set(details.labels.map((label) => label.kind));
+  for (const kind of ['motorway', 'federal', 'main', 'connector']) assert.ok(kinds.has(kind), `no label for ${kind}`);
+  assert.ok(details.labels.every((label) => ['motorway', 'federal', 'main', 'connector'].includes(label.kind)));
 });
 
 test('positions are assigned to the right Ortsteil', () => {

@@ -1,10 +1,17 @@
 import React from 'react';
 
-// Ortsteil boundaries, major roads and their names, drawn over the district map. How much is shown depends on the zoom:
-// the full city shows the motorways, closer views add the other main roads, the names appear when there is room for them.
+// Ortsteil boundaries, major roads and their names, drawn over the district map. Four road classes in four colors:
+// Autobahn, Bundesstrasse, other main road and connecting road. How much is shown depends on the zoom: the full city shows
+// Autobahnen and Bundesstrassen, closer views add the main roads, then the connecting roads; the names appear when there is room.
+// Drawn from the bottom up, so the more important roads lie on top.
+const ROAD_CLASSES = ['connector', 'main', 'federal', 'motorway'];
+
 export function DetailLayers({ details, zoomWidth = 1000, unit, activeIndex = -1, names = 'zoom', labelAt = null }) {
   if (!details) return null;
-  const roadLabels = names === 'zoom' ? (zoomWidth <= 110 ? 70 : zoomWidth <= 200 ? 35 : zoomWidth <= 320 ? 14 : 0) : 0;
+  const visibleClasses = new Set(['motorway', 'federal']);
+  if (zoomWidth <= 750) visibleClasses.add('main');
+  if (zoomWidth <= 450) visibleClasses.add('connector');
+  const roadLabels = names === 'zoom' ? (zoomWidth <= 110 ? 90 : zoomWidth <= 200 ? 45 : zoomWidth <= 320 ? 16 : 0) : 0;
   const ortsteilLabels = names === 'zoom' && zoomWidth <= 260;
   const fontSize = 11 * unit;
   return (
@@ -12,14 +19,14 @@ export function DetailLayers({ details, zoomWidth = 1000, unit, activeIndex = -1
       {details.ortsteile.map((ortsteil, index) => (
         <path key={ortsteil.name} className={`map-ortsteil ${index === activeIndex ? 'is-active' : ''}`} d={ortsteil.d} />
       ))}
-      {zoomWidth <= 700 && <path className="map-road map-road-primary" d={details.roads.primary} />}
-      <path className="map-road map-road-trunk" d={details.roads.trunk} />
-      <path className="map-road map-road-motorway" d={details.roads.motorway} />
+      {ROAD_CLASSES.filter((kind) => visibleClasses.has(kind)).map((kind) => (
+        <path key={kind} className={`map-road map-road-${kind}`} d={details.roads[kind]} />
+      ))}
       {ortsteilLabels && details.ortsteile.map((ortsteil) => (
         <text key={ortsteil.name} className="map-label map-ortsteil-label" x={ortsteil.labelX} y={ortsteil.labelY} fontSize={fontSize} textAnchor="middle">{ortsteil.name}</text>
       ))}
-      {details.labels.slice(0, roadLabels).map((label) => (
-        <text key={label.text} className={`map-label map-road-label ${label.kind === 'motorway' ? 'is-motorway' : ''}`} x={label.x} y={label.y} fontSize={fontSize} textAnchor="middle" dominantBaseline="central" transform={`rotate(${label.angle} ${label.x} ${label.y})`}>{label.text}</text>
+      {details.labels.filter((label) => visibleClasses.has(label.kind)).slice(0, roadLabels).map((label) => (
+        <text key={label.text} className={`map-label map-road-label is-${label.kind}`} x={label.x} y={label.y} fontSize={fontSize} textAnchor="middle" dominantBaseline="central" transform={`rotate(${label.angle} ${label.x} ${label.y})`}>{label.text}</text>
       ))}
       {names === 'active' && activeIndex >= 0 && (
         <text className="map-label map-ortsteil-label is-active" x={labelAt?.x ?? details.ortsteile[activeIndex].labelX} y={labelAt?.y ?? details.ortsteile[activeIndex].labelY} fontSize={12 * unit} textAnchor="middle">{details.ortsteile[activeIndex].name}</text>
@@ -28,12 +35,14 @@ export function DetailLayers({ details, zoomWidth = 1000, unit, activeIndex = -1
   );
 }
 
-export function MapLegend() {
+export function MapLegend({ zoomWidth = 1000 }) {
   const items = [
     ['legend-district', 'Bezirksgrenze'],
     ['legend-ortsteil', 'Ortsteilgrenze'],
     ['legend-motorway', 'Autobahn'],
-    ['legend-road', 'Hauptstraße'],
+    ['legend-federal', 'Bundesstraße'],
+    ['legend-main', 'Hauptstraße'],
+    ['legend-connector', 'Verbindungsstraße'],
   ];
   return (
     <ul className="map-legend text-meta" aria-label="Zeichenerklärung">
@@ -43,6 +52,7 @@ export function MapLegend() {
           {label}
         </li>
       ))}
+      {zoomWidth > 450 && <li className="legend-hint">Kleinere Straßen erscheinen beim Hineinzoomen.</li>}
     </ul>
   );
 }

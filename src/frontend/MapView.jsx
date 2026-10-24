@@ -164,7 +164,7 @@ export function MapView({ filters, onSelect, onReset }) {
         {data.status === 'loading' && <p className="map-overlay text-meta" role="status">Lade Karte …</p>}
       </div>
 
-      {details && <MapLegend />}
+      {details && <MapLegend zoomWidth={view.w} />}
 
       <div className="map-status text-description" role="status">
         {data.status === 'loading' && <span className="skeleton skeleton-w-40" aria-hidden="true" />}
@@ -213,7 +213,7 @@ export function MapView({ filters, onSelect, onReset }) {
       </div>
 
       <p className="map-credit text-meta">
-        Bezirks- und Ortsteilgrenzen: Geoportal Berlin / ALKIS (dl-zero-de/2.0). Autobahnen, Hauptstraßen und Positionen aus den Adressen mit Nominatim ermittelt, © OpenStreetMap-Mitwirkende (ODbL).
+        Bezirks- und Ortsteilgrenzen: Geoportal Berlin / ALKIS (dl-zero-de/2.0). Straßen und Positionen aus den Adressen mit Nominatim ermittelt, © OpenStreetMap-Mitwirkende (ODbL).
         Die Karte lädt keine Kacheln von Dritten.
       </p>
     </section>

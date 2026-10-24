@@ -32,7 +32,7 @@ test('complete details produce a page without warning', () => {
   assert.match(html, /mailto:kontakt@example\.org/);
   assert.match(html, /§ 5 DDG/);
   assert.match(html, /ALKIS Berlin Ortsteile/);
-  assert.match(html, /Autobahnen und Hauptstraßen/);
+  assert.match(html, /Autobahnen, Bundes-, Haupt- und Verbindungsstraßen/);
 });
 
 test('operator input is escaped', () => {
