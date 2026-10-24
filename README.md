@@ -250,6 +250,8 @@ Für mehrere Personen mit eigenen Zugängen gibt es Nutzerkonten mit Anmeldeform
 USERS_ENABLED=1
 ```
 
+Der Server liest die Einstellung nur beim Start: Danach `npm run dev` (oder `npm start`) beenden und neu starten. **Ohne `USERS_ENABLED=1` gibt es `/anmelden`, `/konto` und `/nutzer` nicht**, der Server antwortet dort mit „Seite nicht gefunden“. Im Entwicklungsserver (Port 5173) werden diese Adressen an die API weitergereicht; wer sich nicht angemeldet hat, wird automatisch auf `/anmelden` geleitet.
+
 Danach ist die **ganze Seite geschlossen**: Wer nicht angemeldet ist, landet auf `/anmelden`. Offen bleiben nur Impressum, Datenschutz, der Healthcheck und Stylesheet und Schrift dafür.
 
 - **Ersten Admin anlegen** (nach `npm run db:migrate`):
