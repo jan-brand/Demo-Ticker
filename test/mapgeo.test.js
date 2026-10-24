@@ -81,3 +81,49 @@ test('the OpenStreetMap link carries the position', async () => {
   const { osmUrl } = await import('../src/frontend/mapgeo.js');
   assert.equal(osmUrl(52.5186, 13.3761), 'https://www.openstreetmap.org/?mlat=52.5186&mlon=13.3761#map=17/52.5186/13.3761');
 });
+
+test('the wheel zooms proportionally and gently, in both directions', async () => {
+  const { wheelFactor, WHEEL_ZOOM_SPEED } = await import('../src/frontend/mapgeo.js');
+  const notch = wheelFactor(100);
+  assert.ok(notch > 1.05 && notch < 1.13, `one notch changes the zoom by ${((notch - 1) * 100).toFixed(1)} %`); // earlier: 25 % per event
+  assert.ok(Math.abs(wheelFactor(-100) * notch - 1) < 1e-9); // zooming in and out cancel each other
+  assert.ok(wheelFactor(-100) < 1 && wheelFactor(100) > 1);
+  assert.ok(wheelFactor(4) < 1.005); // a fine touchpad movement changes almost nothing
+  assert.equal(wheelFactor(0), 1);
+  assert.ok(Math.abs(wheelFactor(6000) - wheelFactor(240)) < 1e-9); // a huge jump is limited
+  assert.ok(Math.abs(wheelFactor(1, 1) - wheelFactor(16)) < 1e-9); // lines
+  assert.ok(Math.abs(wheelFactor(1, 2) - wheelFactor(100)) < 1e-9); // pages
+  assert.ok(WHEEL_ZOOM_SPEED > 0 && WHEEL_ZOOM_SPEED < 0.002);
+  // many small events add up to the same as one big one
+  let combined = 1;
+  for (let i = 0; i < 10; i += 1) combined *= wheelFactor(10);
+  assert.ok(Math.abs(combined - wheelFactor(100)) < 1e-9);
+});
+
+test('the view glides towards the goal and stops exactly on it', async () => {
+  const { lerpView } = await import('../src/frontend/mapgeo.js');
+  const goal = { x: 100, y: 80, w: 250, h: 205.75 };
+  let view = { x: 0, y: 0, w: 1000, h: 823 };
+  const first = lerpView(view, goal, 0.25);
+  assert.ok(first.w < 1000 && first.w > 250 && first.x > 0 && first.x < 100);
+  let steps = 0;
+  while (view !== goal && steps < 200) { const next = lerpView(view, goal, 0.25); if (next.w === goal.w && next.x === goal.x) { view = goal; } else view = next; steps += 1; }
+  assert.ok(steps < 100 && view === goal);
+  assert.deepEqual(lerpView(goal, goal, 0.25), goal);
+});
+
+test('screen positions are converted correctly, also when the map is letterboxed', async () => {
+  const { clientToMap, FULL_VIEW } = await import('../src/frontend/mapgeo.js');
+  // exact fit: the center of the element is the center of the map
+  const fit = clientToMap({ left: 10, top: 20, width: 500, height: 411.5 }, FULL_VIEW, 260, 225.75);
+  assert.ok(Math.abs(fit.x - 500) < 1e-6 && Math.abs(fit.y - 411.5) < 1e-6 && Math.abs(fit.scale - 0.5) < 1e-9);
+  // wide element (fullscreen): the map is as high as the element and centered, bars left and right
+  const wide = { left: 0, top: 0, width: 1600, height: 823 };
+  const left = clientToMap(wide, FULL_VIEW, 300, 0); // 300 px = exactly the left edge of the map (1600 - 1000) / 2
+  assert.ok(Math.abs(left.x) < 1e-6 && Math.abs(left.scale - 1) < 1e-9);
+  assert.ok(Math.abs(clientToMap(wide, FULL_VIEW, 800, 411.5).x - 500) < 1e-6); // middle of the screen = middle of the map
+  assert.ok(clientToMap(wide, FULL_VIEW, 100, 100).x < 0); // on the bar, outside of the map
+  // zoomed view: 100 map units wide in a 1000 px element
+  const zoomed = clientToMap({ left: 0, top: 0, width: 1000, height: 822 }, { x: 400, y: 300, w: 100, h: 82.3 }, 500, 411);
+  assert.ok(Math.abs(zoomed.x - 450) < 1e-6 && Math.abs(zoomed.y - 341.15) < 1e-6);
+});

@@ -89,3 +89,37 @@ export function districtAt(lat, lon) {
 
 // OpenStreetMap link for the street-level view. It is only opened when the user clicks it.
 export const osmUrl = (lat, lon) => `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=17/${lat}/${lon}`;
+
+// ---------- Mouse wheel, smooth zoom and screen coordinates ----------
+
+// Zoom speed of the mouse wheel: a classic wheel notch (about 100 px of delta) changes the zoom by about 9 %.
+export const WHEEL_ZOOM_SPEED = 0.0009;
+const MAX_WHEEL_DELTA = 240;
+
+// Wheel events come in pixels, lines or pages and touchpads send many small ones: the zoom factor follows the
+// amount of movement instead of a fixed step per event. Scrolling down (positive) zooms out.
+export function wheelFactor(deltaY, deltaMode = 0) {
+  const pixels = deltaY * (deltaMode === 1 ? 16 : deltaMode === 2 ? 100 : 1);
+  return Math.exp(Math.max(-MAX_WHEEL_DELTA, Math.min(MAX_WHEEL_DELTA, pixels)) * WHEEL_ZOOM_SPEED);
+}
+
+// Moves the shown view a step towards the goal. `k` is the share of the remaining way (0 to 1).
+export function lerpView(current, goal, k) {
+  const next = {
+    x: current.x + (goal.x - current.x) * k,
+    y: current.y + (goal.y - current.y) * k,
+    w: current.w + (goal.w - current.w) * k,
+    h: current.h + (goal.h - current.h) * k,
+  };
+  const close = Math.abs(goal.w - next.w) < 0.05 && Math.abs(goal.x - next.x) < 0.05 && Math.abs(goal.y - next.y) < 0.05;
+  return close ? { ...goal } : next;
+}
+
+// Screen position -> map units. An SVG that is taller or wider than the map is letterboxed ("meet"), as in fullscreen,
+// so the map does not start at the edge of the element; this offset is taken into account.
+export function clientToMap(rect, view, clientX, clientY) {
+  const scale = Math.min(rect.width / view.w, rect.height / view.h);
+  const offsetX = (rect.width - view.w * scale) / 2;
+  const offsetY = (rect.height - view.h * scale) / 2;
+  return { x: view.x + (clientX - rect.left - offsetX) / scale, y: view.y + (clientY - rect.top - offsetY) / scale, scale };
+}

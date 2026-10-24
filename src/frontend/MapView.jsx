@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatDay, formatTime } from './format.js';
 import { DetailLayers, MapLegend } from './DetailLayers.jsx';
 import { useBerlinDetails } from './details.js';
 import { Icon } from './Icon.jsx';
-import { centerView, clampView, clusterPoints, FULL_VIEW, MAP, toPoint, zoomView } from './mapgeo.js';
+import { centerView, clampView, clientToMap, clusterPoints, FULL_VIEW, lerpView, MAP, toPoint, wheelFactor, zoomView } from './mapgeo.js';
 
 const PANEL_LIMIT = 10;
+const GLIDE_MS = 110; // time constant of the smooth zoom: the view covers about two thirds of the way in this time
 
 function useMapData(filters) {
   const [state, setState] = useState({ status: 'loading', points: [], total: 0, located: 0, pending: 0, truncated: false });
@@ -29,52 +30,117 @@ function useMapData(filters) {
   return state;
 }
 
+// The shown view glides towards a goal view, so zooming with the wheel or the buttons feels smooth and gentle.
+// With "reduce motion" in the system settings the view jumps instead.
+function useGlidingView() {
+  const [view, setViewState] = useState(FULL_VIEW);
+  const shown = useRef(FULL_VIEW);
+  const goal = useRef(FULL_VIEW);
+  const frame = useRef(0);
+  const last = useRef(0);
+
+  const show = useCallback((next) => { shown.current = next; setViewState(next); }, []);
+
+  const step = useCallback((now) => {
+    const elapsed = Math.min(64, now - (last.current || now - 16));
+    last.current = now;
+    const next = lerpView(shown.current, goal.current, 1 - Math.exp(-elapsed / GLIDE_MS));
+    show(next);
+    if (next !== goal.current && (next.w !== goal.current.w || next.x !== goal.current.x || next.y !== goal.current.y)) frame.current = requestAnimationFrame(step);
+    else frame.current = 0;
+  }, [show]);
+
+  const moveTo = useCallback((next, { instant = false } = {}) => {
+    goal.current = next;
+    if (instant || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      cancelAnimationFrame(frame.current);
+      frame.current = 0;
+      show(next);
+    } else if (!frame.current) {
+      last.current = 0;
+      frame.current = requestAnimationFrame(step);
+    }
+  }, [show, step]);
+
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  return { view, shown, goal, moveTo };
+}
+
+// Fullscreen of the whole map section (map, legend, counts and the selection), with a fallback for browsers
+// that cannot do element fullscreen (iPhone): the section then covers the page.
+function useFullscreen(sectionRef) {
+  const [native, setNative] = useState(false);
+  const [covering, setCovering] = useState(false);
+
+  useEffect(() => {
+    const onChange = () => setNative(document.fullscreenElement === sectionRef.current);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, [sectionRef]);
+
+  useEffect(() => {
+    if (!covering) return undefined;
+    const onKey = (event) => { if (event.key === 'Escape') setCovering(false); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+  }, [covering]);
+
+  const toggle = useCallback(async () => {
+    if (document.fullscreenEnabled) {
+      try {
+        if (document.fullscreenElement === sectionRef.current) await document.exitFullscreen();
+        else await sectionRef.current.requestFullscreen();
+        return;
+      } catch { /* the browser refused: use the fallback */ }
+    }
+    setCovering((current) => !current);
+  }, [sectionRef]);
+
+  return { active: native || covering, covering, toggle };
+}
+
 export function MapView({ filters, onSelect, onReset }) {
   const data = useMapData(filters);
   const details = useBerlinDetails();
+  const sectionRef = useRef(null);
   const svgRef = useRef(null);
   const drag = useRef(null);
   const moved = useRef(false);
-  const viewRef = useRef(FULL_VIEW);
-  const [view, setViewState] = useState(FULL_VIEW);
-  const [widthPx, setWidthPx] = useState(800);
+  const { view, shown, goal, moveTo } = useGlidingView();
+  const fullscreen = useFullscreen(sectionRef);
+  const [size, setSize] = useState({ width: 800, height: 660 });
   const [selection, setSelection] = useState(null);
-
-  const setView = (next) => {
-    viewRef.current = next;
-    setViewState(next);
-  };
 
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return undefined;
-    const observer = new ResizeObserver(([entry]) => setWidthPx(Math.max(280, entry.contentRect.width)));
+    const observer = new ResizeObserver(([entry]) => setSize({ width: Math.max(280, entry.contentRect.width), height: Math.max(200, entry.contentRect.height) }));
     observer.observe(svg);
 
-    // Wheel zoom needs a non-passive listener so the page does not scroll at the same time.
+    // Wheel zoom needs a non-passive listener so the page does not scroll at the same time. The zoom follows the amount of
+    // wheel movement (see wheelFactor) and keeps the map point under the cursor in place.
     const onWheel = (event) => {
       event.preventDefault();
-      const rect = svg.getBoundingClientRect();
-      const current = viewRef.current;
-      const cx = current.x + ((event.clientX - rect.left) / rect.width) * current.w;
-      const cy = current.y + ((event.clientY - rect.top) / rect.height) * current.h;
-      setView(zoomView(current, event.deltaY > 0 ? 1.25 : 0.8, cx, cy));
+      const target = goal.current;
+      const at = clientToMap(svg.getBoundingClientRect(), target, event.clientX, event.clientY);
+      moveTo(zoomView(target, wheelFactor(event.deltaY, event.deltaMode), at.x, at.y));
     };
     svg.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       observer.disconnect();
       svg.removeEventListener('wheel', onWheel);
     };
-  }, []);
+  }, [goal, moveTo]);
 
   // One pixel on screen in map units: keeps markers and text the same size at every zoom level.
-  const unit = view.w / widthPx;
+  const unit = Math.max(view.w / size.width, view.h / size.height);
   const clusters = useMemo(() => clusterPoints(data.points, 30 * unit), [data.points, unit]);
   const zoomed = view.w < FULL_VIEW.w - 1;
 
   const onPointerDown = (event) => {
     if (!zoomed) return;
-    drag.current = { x: event.clientX, y: event.clientY, view: viewRef.current };
+    drag.current = { x: event.clientX, y: event.clientY, view: shown.current };
     moved.current = false;
   };
   const onPointerMove = (event) => {
@@ -86,19 +152,19 @@ export function MapView({ filters, onSelect, onReset }) {
       // Capture only once it is a real drag, otherwise clicks on markers would be redirected to the map.
       svgRef.current.setPointerCapture?.(event.pointerId);
     }
-    const rect = svgRef.current.getBoundingClientRect();
     const start = drag.current.view;
-    setView(clampView({ ...start, x: start.x - (dx / rect.width) * start.w, y: start.y - (dy / rect.height) * start.h }));
+    const { scale } = clientToMap(svgRef.current.getBoundingClientRect(), start, 0, 0);
+    moveTo(clampView({ ...start, x: start.x - dx / scale, y: start.y - dy / scale }), { instant: true });
   };
   const onPointerUp = () => { drag.current = null; };
 
   const activate = (cluster) => {
     if (moved.current) return;
-    if (cluster.items.length === 1 || cluster.sameSpot || view.w <= 130) {
+    if (cluster.items.length === 1 || cluster.sameSpot || goal.current.w <= 130) {
       setSelection(cluster.items);
     } else {
       setSelection(null);
-      setView(centerView(view, cluster.x, cluster.y, 0.4));
+      moveTo(centerView(goal.current, cluster.x, cluster.y, 0.4));
     }
   };
 
@@ -117,7 +183,7 @@ export function MapView({ filters, onSelect, onReset }) {
   const hidden = data.total - data.located;
 
   return (
-    <section className="map-view" aria-label="Kartenansicht">
+    <section ref={sectionRef} className={`map-view ${fullscreen.covering ? 'is-pseudo-fullscreen' : ''}`} aria-label="Kartenansicht">
       <div className="map-frame">
         <svg
           ref={svgRef}
@@ -134,7 +200,7 @@ export function MapView({ filters, onSelect, onReset }) {
             <path key={district.name} className="map-district" d={district.d} />
           ))}
           <DetailLayers details={details} zoomWidth={view.w} unit={unit} />
-          {(widthPx >= 520 || zoomed) && view.w > 260 && MAP.districts.map((district) => (
+          {(size.width >= 520 || zoomed) && view.w > 260 && MAP.districts.map((district) => (
             <text key={district.name} className="map-label" x={district.labelX} y={district.labelY} fontSize={11 * unit} textAnchor="middle">{district.name}</text>
           ))}
           {clusters.map((cluster) => {
@@ -157,9 +223,10 @@ export function MapView({ filters, onSelect, onReset }) {
           })}
         </svg>
         <div className="map-controls" role="group" aria-label="Kartensteuerung">
-          <button type="button" className="btn btn-secondary btn-icon" aria-label="Hineinzoomen" onClick={() => setView(zoomView(view, 0.6))}><Icon name="Plus" /></button>
-          <button type="button" className="btn btn-secondary btn-icon" aria-label="Herauszoomen" onClick={() => setView(zoomView(view, 1.6))}><Icon name="Minus" /></button>
-          <button type="button" className="btn btn-secondary btn-icon" aria-label="Gesamte Stadt zeigen" disabled={!zoomed} onClick={() => setView(FULL_VIEW)}><Icon name="Maximize" /></button>
+          <button type="button" className="btn btn-secondary btn-icon" aria-label={fullscreen.active ? 'Vollbild beenden' : 'Vollbild'} aria-pressed={fullscreen.active} onClick={fullscreen.toggle}><Icon name={fullscreen.active ? 'Shrink' : 'Expand'} /></button>
+          <button type="button" className="btn btn-secondary btn-icon" aria-label="Hineinzoomen" onClick={() => moveTo(zoomView(goal.current, 0.6))}><Icon name="Plus" /></button>
+          <button type="button" className="btn btn-secondary btn-icon" aria-label="Herauszoomen" onClick={() => moveTo(zoomView(goal.current, 1.6))}><Icon name="Minus" /></button>
+          <button type="button" className="btn btn-secondary btn-icon" aria-label="Gesamte Stadt zeigen" disabled={!zoomed} onClick={() => moveTo(FULL_VIEW)}><Icon name="House" /></button>
         </div>
         {data.status === 'loading' && <p className="map-overlay text-meta" role="status">Lade Karte …</p>}
       </div>
@@ -192,7 +259,7 @@ export function MapView({ filters, onSelect, onReset }) {
         </div>
       )}
 
-      <div className="card card-compact" aria-live="polite">
+      <div className="card card-compact map-selection" aria-live="polite">
         {selection ? (
           <>
             <h2 className="card-title">{selection.length === 1 ? 'Ausgewählte Versammlung' : `${selection.length} Versammlungen an dieser Stelle`}</h2>

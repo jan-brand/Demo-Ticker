@@ -603,3 +603,13 @@ button.nav-item { width: 100%; font: inherit; font-weight: 500; cursor: pointer;
 .legend-federal { stroke: var(--road-federal); stroke-width: 2.1; }
 .legend-main { stroke: var(--road-main); stroke-width: 1.6; }
 .legend-connector { stroke: var(--road-connector); stroke-width: 1.2; }
+
+/* ---------- Map fullscreen: the whole map section (map, legend, counts, selection) fills the screen ---------- */
+.map-view:fullscreen, .map-view.is-pseudo-fullscreen { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); overflow: auto; background: var(--background); }
+.map-view.is-pseudo-fullscreen { position: fixed; inset: 0; z-index: 90; }
+.map-view:fullscreen .map-frame, .map-view.is-pseudo-fullscreen .map-frame { display: flex; flex: 1 1 auto; min-height: 55vh; }
+.map-view:fullscreen .map, .map-view.is-pseudo-fullscreen .map { flex: 1; height: 100%; max-height: none; }
+.map-view:fullscreen .map-legend, .map-view.is-pseudo-fullscreen .map-legend,
+.map-view:fullscreen .map-status, .map-view.is-pseudo-fullscreen .map-status,
+.map-view:fullscreen .map-credit, .map-view.is-pseudo-fullscreen .map-credit { margin: 0; }
+.map-view:fullscreen .map-selection, .map-view.is-pseudo-fullscreen .map-selection { flex: none; max-height: 35vh; overflow: auto; }
