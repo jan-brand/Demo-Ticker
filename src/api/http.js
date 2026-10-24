@@ -48,6 +48,7 @@ export function securityHeaders(request, env = process.env) {
     'permissions-policy': 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
     'cross-origin-opener-policy': 'same-origin',
   };
+  if (['1', 'true', 'on'].includes(String(env.AUTH_ENABLED ?? '').toLowerCase())) headers['x-robots-tag'] = 'noindex, nofollow';
   if (isSecure(request, env)) headers['strict-transport-security'] = 'max-age=31536000; includeSubDomains';
   return headers;
 }

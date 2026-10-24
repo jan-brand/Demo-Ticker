@@ -103,7 +103,7 @@ npm run geocode     # nur Ortsbestimmung, alle offenen Einträge (beim ersten Ma
 
 - Ergebnisse außerhalb von Berlin werden verworfen (gleichnamige Straßen in anderen Städten). Einträge ohne Straße oder ohne Treffer erscheinen nicht auf der Karte; die Seite nennt, wie viele es sind. Nicht gefundene Einträge werden nach `GEOCODER_RETRY_DAYS` (7) erneut versucht.
 - Abschalten: `GEOCODING=off` in `.env`. Eigener Geocoder: `GEOCODER_URL`. Kontaktangabe für den User-Agent (die Nominatim-Regeln empfehlen sie): `GEOCODER_CONTACT` in `.env`; sie wird nur gesendet, wenn du sie selbst einträgst.
-- Namensnennung: Die Seite nennt unter der Karte und im Impressum „© OpenStreetMap-Mitwirkende (ODbL)“ sowie die Herkunft der Bezirksgrenzen. Prüfe die Lizenzbedingungen der Bezirksgrenzen (Geoportal Berlin) für deinen Einsatz.
+- Namensnennung: Die Seite nennt unter der Karte und im Impressum „© OpenStreetMap-Mitwirkende (ODbL)“ sowie die Herkunft der Bezirksgrenzen. Die Bezirksgrenzen stammen aus dem Datensatz „ALKIS Berlin Bezirke“ des Geoportals Berlin, veröffentlicht unter der Datenlizenz Deutschland – Zero – Version 2.0 (keine Namensnennungspflicht, die Angabe erfolgt freiwillig).
 - Die Grenzen lassen sich neu erzeugen: `node scripts/build-berlin-map.mjs [GeoJSON-Datei oder URL]`.
 
 ## Datenbank einrichten
@@ -200,6 +200,25 @@ Die Anwendung liefert HTTPS nicht von sich aus mit, ein Zertifikat muss von eine
 
 Über HTTPS sendet der Server zusätzlich `Strict-Transport-Security`. Unabhängig davon setzt er immer eine strenge Content-Security-Policy (alles nur vom eigenen Server, kein Einbetten in fremde Seiten), `nosniff` und `Referrer-Policy: no-referrer`.
 
+### Login für die ganze Seite
+
+Soll die Seite nur für bestimmte Personen zugänglich sein, genügt ein Schalter in `.env`:
+
+```text
+AUTH_ENABLED=1
+AUTH_USER=redaktion
+AUTH_PASSWORD_HASH=scrypt.16384....
+```
+
+Dann verlangt der Server für **alles** ein Passwort: Oberfläche, Dateien, API, Karte und Feed (HTTP-Basic-Authentifizierung, der Browser zeigt sein eigenes Anmeldefenster). Es werden keine Cookies gesetzt, die Aussagen der Datenschutzerklärung bleiben richtig; sie nennt den Login automatisch. Zusätzlich sendet der Server `X-Robots-Tag: noindex`, damit Suchmaschinen die Seite nicht aufnehmen.
+
+- **Passwort-Hash statt Klartext:** `npm run auth:hash -- "mein Passwort"` gibt die Zeile `AUTH_PASSWORD_HASH=...` aus, die du in `.env` einträgst (scrypt mit Salz). Zum Ausprobieren geht auch `AUTH_PASSWORD=...` im Klartext; steht beides in der `.env`, gilt der Hash.
+- **Sicher beim Start:** Fehlt Benutzer oder Passwort, startet der Server nicht, statt die Seite versehentlich offen zu lassen.
+- **Ausnahmen:** `/healthz` (für den Docker-Healthcheck) ist immer offen und liefert nur `ok`. Impressum und Datenschutz bleiben standardmäßig ohne Login lesbar, weil sie erreichbar sein müssen; mit `AUTH_PROTECT_LEGAL=1` werden auch sie geschützt.
+- **Sperre:** Nach `AUTH_MAX_FAILURES` (10) falschen Anmeldungen wird die Adresse für `AUTH_LOCK_MINUTES` (15) mit Status 429 gesperrt. Hinter einem Proxy `TRUST_PROXY=1` setzen, damit die echte Adresse gezählt wird.
+- **Wichtig:** Basic-Authentifizierung überträgt das Passwort bei jeder Anfrage, **sie gehört nur zusammen mit HTTPS in den Betrieb** (siehe oben). Der Login gilt für den Node-Server (`npm start`, Docker), nicht für den Vite-Entwicklungsserver auf Port 5173.
+- **Feed-Reader und Skripte** melden sich mit `https://benutzer:passwort@host/feed.xml` oder einem Authorization-Header an.
+
 ### Impressum und Datenschutz
 
 Unter `/impressum` und `/datenschutz` liegen serverseitig erzeugte Seiten. Die Angaben zum Betreiber stehen bewusst nicht im Repository, sondern in `.env`:
@@ -257,6 +276,7 @@ Die Unit-Tests (Normalisierung, Plausibilitätsprüfung, Suchabfrage, Zeitraum-S
 - `src/import/guard.js` – Plausibilitätsprüfung der Quellantwort
 - `src/api/server.js` – REST-API, Routing und Auslieferung des Produktionsbuilds
 - `src/api/http.js` – Sicherheits-Header, Kompression, Caching, HTTPS-Umleitung
+- `src/api/auth.js`, `scripts/hash-password.mjs` – optionaler Login für die ganze Seite
 - `src/api/feed.js` – Atom-Feed
 - `Dockerfile`, `docker-compose.yml` – Container für Entwicklung (nur Datenbank) und Betrieb (Profil `app`)
 - `scripts/install-import-task.ps1` – Windows-Aufgabe für den regelmäßigen Import

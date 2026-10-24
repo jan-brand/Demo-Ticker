@@ -11,6 +11,19 @@ test('missing operator details are reported and shown as a warning', () => {
   assert.match(renderLegalPage('datenschutz', { env: {}, stylesheet }), /Angaben des Betreibers fehlen/);
 });
 
+test('template placeholders count as missing', () => {
+  const placeholders = { LEGAL_NAME: 'BITTE ANPASSEN: Vorname Nachname', LEGAL_STREET: 'bitte anpassen', LEGAL_CITY: '10115 Berlin', LEGAL_EMAIL: 'kontakt@example.org' };
+  assert.deepEqual(missingLegalFields(placeholders).map((field) => field.key), ['LEGAL_NAME', 'LEGAL_STREET']);
+  assert.match(renderLegalPage('impressum', { env: placeholders, stylesheet }), /Angaben des Betreibers fehlen/);
+});
+
+test('a placeholder hosting note is not published', () => {
+  const html = renderLegalPage('datenschutz', { env: { ...complete, LEGAL_HOSTING: 'BITTE ANPASSEN: Hoster' }, stylesheet });
+  assert.doesNotMatch(html, /BITTE ANPASSEN/);
+  assert.match(html, /Der Betreiber ergänzt hier/);
+  assert.match(renderLegalPage('datenschutz', { env: { ...complete, LEGAL_HOSTING: 'Hetzner Online GmbH, Logs 7 Tage' }, stylesheet }), /Hetzner Online GmbH/);
+});
+
 test('complete details produce a page without warning', () => {
   assert.deepEqual(missingLegalFields(complete), []);
   const html = renderLegalPage('impressum', { env: complete, stylesheet });
@@ -35,6 +48,8 @@ test('privacy page states the facts and has a valid document skeleton', () => {
   assert.match(html, /keine Cookies/);
   assert.match(html, /Art\. 6 Abs\. 1 lit\. f DSGVO/);
   assert.match(html, /Nominatim/);
+  assert.match(html, /Speicherdauer/);
+  assert.match(html, /Profilbildung/);
   assert.match(html, /keine Kartenkacheln/);
   assert.equal((html.match(/<h1>/g) ?? []).length, 1);
 });

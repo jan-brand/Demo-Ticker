@@ -8,11 +8,16 @@ import { pool } from '../db/pool.js';
 import { renderLegalPage, renderNotFound } from '../legal/pages.js';
 import { FEED_QUERY, renderFeed } from './feed.js';
 import { httpsRedirectTarget, isSecure, securityHeaders, send, sendFile, sendJson } from './http.js';
+import { authConfig, clientKey, credentialsValid, FailureLimiter, isPublicPath } from './auth.js';
 import { buildAssemblySearch, buildMapQuery, MAX_MAP_POINTS } from './query.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const frontendRoot = resolve(root, 'dist');
 const port = Number(process.env.PORT ?? 3000);
+
+// Fails at startup (not at the first request) if the login is enabled but incomplete.
+const auth = authConfig();
+const limiter = new FailureLimiter({ maxFailures: auth.maxFailures, lockMinutes: auth.lockMinutes });
 
 async function handleAssemblyList(request, response, url) {
   const search = buildAssemblySearch(Object.fromEntries(url.searchParams));
@@ -107,6 +112,29 @@ async function handleStatic(request, response, pathname) {
   return true;
 }
 
+// Returns true if the request may continue. Otherwise the response has been sent.
+async function passesLogin(request, response, pathname) {
+  if (isPublicPath(pathname, auth)) return true;
+  const key = clientKey(request);
+  if (limiter.isBlocked(key)) {
+    await send(request, response, {
+      status: 429, type: 'text/plain; charset=utf-8', body: 'Zu viele fehlgeschlagene Anmeldungen. Bitte später erneut versuchen.',
+      headers: { 'cache-control': 'no-store', 'retry-after': String(auth.lockMinutes * 60) },
+    });
+    return false;
+  }
+  if (credentialsValid(request.headers.authorization, auth)) {
+    limiter.success(key);
+    return true;
+  }
+  if (request.headers.authorization) limiter.fail(key);
+  await send(request, response, {
+    status: 401, type: 'text/plain; charset=utf-8', body: 'Anmeldung erforderlich.',
+    headers: { 'www-authenticate': 'Basic realm="Demo-Ticker", charset="UTF-8"', 'cache-control': 'no-store' },
+  });
+  return false;
+}
+
 async function route(request, response) {
   const redirect = httpsRedirectTarget(request);
   if (redirect) {
@@ -116,6 +144,9 @@ async function route(request, response) {
 
   const url = new URL(request.url, `http://${request.headers.host ?? 'localhost'}`);
   const isRead = request.method === 'GET' || request.method === 'HEAD';
+
+  if (url.pathname === '/healthz') return send(request, response, { type: 'text/plain; charset=utf-8', body: 'ok', headers: { 'cache-control': 'no-store' } });
+  if (!(await passesLogin(request, response, url.pathname))) return undefined;
 
   if (url.pathname.startsWith('/api/')) {
     if (!isRead) return sendJson(request, response, 405, { error: 'Method not allowed' });

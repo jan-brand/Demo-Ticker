@@ -15,8 +15,13 @@ export const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (ch
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
 ));
 
+// Values that still start with the marker from the template count as missing, so a forgotten placeholder never
+// passes as a real imprint.
+const PLACEHOLDER = /^\s*BITTE ANPASSEN/i;
+const isFilled = (value) => String(value ?? '').trim() !== '' && !PLACEHOLDER.test(String(value));
+
 export function missingLegalFields(env = process.env) {
-  return REQUIRED.filter(([key]) => !String(env[key] ?? '').trim()).map(([key, label]) => ({ key, label }));
+  return REQUIRED.filter(([key]) => !isFilled(env[key])).map(([key, label]) => ({ key, label }));
 }
 
 function operatorBlock(env) {
@@ -52,11 +57,19 @@ ${operatorBlock(env)}
 <p>Die angezeigten Versammlungen stammen aus den öffentlich abrufbaren Angaben der Polizei Berlin
 (<a href="${SOURCE_URL}" rel="noopener">Versammlungen und Aufzüge</a>). Demo-Ticker archiviert diese Angaben und
 vermerkt spätere Änderungen. Für die Richtigkeit, Vollständigkeit und Aktualität ist ausschließlich die Quelle maßgeblich.</p>
-<p>Die Bezirksgrenzen der Karte stammen aus dem Geoportal Berlin (ALKIS). Die Positionen der Versammlungen werden aus den Adressen mit Nominatim ermittelt, © OpenStreetMap-Mitwirkende (<a href="https://www.openstreetmap.org/copyright" rel="noopener">ODbL</a>).</p>`;
+<p>Die Bezirksgrenzen der Karte stammen aus dem Datensatz „ALKIS Berlin Bezirke“ des Geoportals Berlin (Senatsverwaltung für Stadtentwicklung, Bauen und Wohnen, <a href="https://www.govdata.de/dl-de/zero-2-0" rel="noopener">Datenlizenz Deutschland – Zero – Version 2.0</a>). Die Positionen der Versammlungen werden aus den Adressen mit Nominatim ermittelt, © OpenStreetMap-Mitwirkende (<a href="https://www.openstreetmap.org/copyright" rel="noopener">ODbL</a>).</p>`;
+}
+
+const loginOn = (env) => ['1', 'true', 'on'].includes(String(env.AUTH_ENABLED ?? '').toLowerCase());
+
+function loginSection(env) {
+  if (!loginOn(env)) return '';
+  return `<h2>Anmeldung</h2>
+<p>Der Zugang zu dieser Website ist passwortgeschützt (HTTP-Authentifizierung). Benutzername und Passwort überträgt Ihr Browser bei jeder Anfrage an den Server und werden dort nur zur Prüfung verarbeitet, nicht gespeichert. Dafür werden keine Cookies gesetzt. Nach mehreren fehlgeschlagenen Versuchen wird die Adresse vorübergehend gesperrt; dazu hält der Server die IP-Adresse kurzzeitig im Arbeitsspeicher (Art. 6 Abs. 1 lit. f DSGVO, Schutz vor missbräuchlichen Zugriffen).</p>`;
 }
 
 function datenschutz(env) {
-  const hosting = env.LEGAL_HOSTING
+  const hosting = isFilled(env.LEGAL_HOSTING)
     ? `<p>${escapeHtml(env.LEGAL_HOSTING)}</p>`
     : '<p>Der Betreiber ergänzt hier, bei welchem Anbieter die Anwendung gehostet wird und ob dieser Zugriffsprotokolle führt (Angabe über <code>LEGAL_HOSTING</code> in der <code>.env</code>).</p>';
   return `
@@ -80,6 +93,8 @@ ${contactBlock(env)}
 <h3>Hosting</h3>
 ${hosting}
 
+${loginSection(env)}
+
 <h2>Suche</h2>
 <p>Suchbegriffe, Zeiträume, Postleitzahl und Straße werden an den Server übertragen, um die Trefferliste zu erstellen. Sie werden nicht gespeichert und nicht ausgewertet.</p>
 
@@ -89,6 +104,9 @@ ${hosting}
 <h2>Karte und Ortsbestimmung</h2>
 <p>Die Kartenansicht wird vollständig auf diesem Server erzeugt. Es werden keine Kartenkacheln, Schriften oder Skripte von Dritten geladen, Ihre IP-Adresse gelangt dadurch an keinen Kartenanbieter.</p>
 <p>Um Versammlungen auf der Karte zu zeigen, ermittelt der Server die Koordinaten der veröffentlichten Adressen (Straße, Hausnummer, Postleitzahl) über den Geocoding-Dienst Nominatim der OpenStreetMap-Foundation. Übermittelt werden ausschließlich diese öffentlich bekannten Adressen, keine Angaben über Besucherinnen und Besucher. Die Ergebnisse stammen aus Daten der OpenStreetMap-Mitwirkenden (<a href="https://www.openstreetmap.org/copyright" rel="noopener">ODbL</a>). Die Funktion kann der Betreiber abschalten.</p>
+
+<h2>Empfänger und Speicherdauer</h2>
+<p>Empfänger Ihrer technisch notwendigen Verbindungsdaten ist der oben genannte Hosting-Anbieter, soweit er die Seite ausliefert. Die Verbindungsdaten werden von der Anwendung nicht gespeichert; Aufbewahrungsfristen von Zugriffsprotokollen eines Hosters oder Proxys ergänzt der Betreiber im Abschnitt Hosting. Die archivierten Versammlungsdaten werden gespeichert, solange das Archiv betrieben wird, und auf berechtigte Anfrage berichtigt oder gelöscht. Die Bereitstellung Ihrer Daten beim Seitenaufruf ist technisch erforderlich, eine automatisierte Entscheidungsfindung oder Profilbildung findet nicht statt.</p>
 
 <h2>Ihre Rechte</h2>
 <p>Sie haben das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch gegen die Verarbeitung (Art. 15 bis 21 DSGVO). Wenden Sie sich dafür an die oben genannte Kontaktadresse. Außerdem können Sie sich bei einer Datenschutzaufsichtsbehörde beschweren, zum Beispiel bei der ${AUTHORITY}.</p>`;

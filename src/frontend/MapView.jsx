@@ -191,7 +191,7 @@ export function MapView({ filters, onSelect }) {
       </div>
 
       <p className="map-credit">
-        Bezirksgrenzen: Geoportal Berlin (ALKIS). Positionen aus den Adressen mit Nominatim ermittelt, © OpenStreetMap-Mitwirkende (ODbL).
+        Bezirksgrenzen: Geoportal Berlin / ALKIS Berlin Bezirke (dl-zero-de/2.0). Positionen aus den Adressen mit Nominatim ermittelt, © OpenStreetMap-Mitwirkende (ODbL).
         Die Karte lädt keine Kacheln von Dritten.
       </p>
     </section>

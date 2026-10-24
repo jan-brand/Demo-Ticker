@@ -89,7 +89,7 @@ const districts = features.map(({ name, rings }) => {
 });
 
 const module = {
-  source: 'Bezirksgrenzen Berlin (ALKIS), Geoportal Berlin / Technologiestiftung Berlin',
+  source: 'ALKIS Berlin Bezirke, Senatsverwaltung für Stadtentwicklung, Bauen und Wohnen (Geoportal Berlin), Datenlizenz Deutschland - Zero - Version 2.0; Aufbereitung als GeoJSON: Technologiestiftung Berlin',
   lonMin, latMax, cosLat0, scale, width: WIDTH, height, districts,
 };
 
