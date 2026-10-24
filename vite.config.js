@@ -6,6 +6,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:3000',
+      '/impressum': 'http://localhost:3000',
+      '/datenschutz': 'http://localhost:3000',
     },
   },
 });

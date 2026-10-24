@@ -2,32 +2,157 @@
 
 Demo-Ticker archiviert die offiziellen Berliner Daten zu angemeldeten Versammlungen und Aufzügen in PostgreSQL. Dieses Repository enthält die lauffähigen Kerne von **Phase 1 und Phase 2** des Projektplans: Datenimport, REST-Suche und ein schlankes React-Frontend.
 
+## Voraussetzungen installieren
+
+Auf einem frischen Windows-Rechner (10/11) ist nichts vorinstalliert. Es werden nur drei Programme gebraucht; PostgreSQL läuft ausschließlich im Docker-Container und wird nicht separat installiert.
+
+1. **Git** (zum Herunterladen des Projekts): <https://git-scm.com/download/win>
+2. **Node.js 20 oder neuer** (LTS-Version): <https://nodejs.org/>
+3. **Docker Desktop**: <https://www.docker.com/products/docker-desktop/>
+
+Hinweise zu Docker Desktop:
+
+- Es nutzt WSL 2. Der Installer richtet das bei Bedarf ein, danach ist ein **Neustart** nötig.
+- Docker Desktop nach der Installation einmal starten und warten, bis unten links „Engine running“ steht. Ohne laufendes Docker Desktop schlägt `docker compose` fehl.
+- In der Regel muss in der BIOS/UEFI-Einstellung die Virtualisierung (Intel VT-x / AMD-V) aktiv sein.
+
+Nach der Installation ein **neues** Terminal (PowerShell) öffnen, damit die Programme im PATH gefunden werden, und prüfen:
+
+```powershell
+git --version
+node --version
+docker --version
+docker compose version
+```
+
+Alle vier Befehle müssen eine Version ausgeben. `node --version` muss mindestens `v20` zeigen.
+
 ## Lokal starten
 
-Voraussetzungen: Node.js 20+ und Docker.
-
-```sh
+```powershell
+git clone <Repository-URL> demo-ticker
+cd demo-ticker
 npm install
-cp .env.example .env
+Copy-Item .env.example .env
 docker compose up -d postgres
 npm run db:migrate
 npm test
 npm run dev
 ```
 
+Unter macOS/Linux statt `Copy-Item`: `cp .env.example .env`. Die einzelnen Schritte zur Datenbank erklärt der nächste Abschnitt.
+
 Für einen Test ohne Netzwerk kann eine gespeicherte API-Antwort importiert werden:
 
-```sh
-IMPORT_FILE=./data/all.json npm run import
+```powershell
+$env:IMPORT_FILE='./data/all.json'; npm run import
 ```
+
+(macOS/Linux: `IMPORT_FILE=./data/all.json npm run import`)
 
 Für den Live-Abruf muss `ASSEMBLIES_API_URL` in `.env` auf den offiziellen `all.json`-Endpunkt der Polizei Berlin gesetzt werden:
 
-```sh
-ASSEMBLIES_API_URL='https://www.berlin.de/polizei/.../versammlungen-aufzuege/index.php/index/all.json' npm run import
+```powershell
+$env:ASSEMBLIES_API_URL='https://www.berlin.de/polizei/.../versammlungen-aufzuege/index.php/index/all.json'; npm run import
 ```
 
+(macOS/Linux: `ASSEMBLIES_API_URL='…' npm run import`)
+
 Der Import ist transaktional. Jeder Datensatz erhält einen stabilen SHA-256-Schlüssel aus Datum, Beginn, Thema und Ortsangaben. Änderungen werden in `assembly_history` als JSON-Diff archiviert; alte Einträge bleiben erhalten.
+
+## Automatischer Import
+
+Der Import läuft ohne Zutun regelmäßig, solange dieser Prozess läuft:
+
+```powershell
+npm run import:schedule
+```
+
+Er ruft die Quelle sofort und danach alle `IMPORT_INTERVAL_MINUTES` Minuten ab (Standard 60, einstellbar in `.env`) und protokolliert jeden Lauf auf der Konsole. Ein fehlgeschlagener Lauf stoppt den Zeitplan nicht, der nächste Lauf startet planmäßig. Beenden mit `Strg+C`. Ein einzelner Lauf ohne Zeitplan: `npm run import`.
+
+Jeder Lauf wird in der Tabelle `import_runs` festgehalten (Status, Anzahl neu/geändert/unverändert/entfernt, Fehlermeldung). Der letzte Stand ist über `GET /api/import/status` abrufbar.
+
+Das Archiv schützt sich selbst:
+
+- **Entfernte Einträge:** Eine kommende Versammlung, die die Quelle nicht mehr listet, wird nicht gelöscht, sondern mit `removed_at` markiert und in der Historie vermerkt. Taucht sie wieder auf, wird die Markierung zurückgenommen. Vergangene Versammlungen, die aus der Quelle verschwinden, bleiben unverändert.
+- **Plausibilitätsprüfung:** Liefert die Quelle keine Einträge oder weniger als die Hälfte des letzten erfolgreichen Laufs, wird der Import abgebrochen, ohne Daten zu ändern. So führt eine defekte Antwort nicht dazu, dass alle Einträge als entfernt gelten.
+- **Zeitüberschreitung:** Der Abruf bricht nach 60 Sekunden ab (`IMPORT_TIMEOUT_MS`).
+
+Soll der Import unabhängig von einem offenen Terminal laufen, gibt es drei Wege:
+
+- **Windows-Aufgabe:** Das Skript `scripts/install-import-task.ps1` legt eine Aufgabe „Demo-Ticker Import“ an, die `npm run import` stündlich startet und nach `logs/import.log` schreibt. Die Aufgabe läuft unter deinem Benutzer, solange du angemeldet bist, und braucht einen laufenden Datenbank-Container (Docker Desktop):
+
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File scripts\install-import-task.ps1
+  ```
+
+  Anderes Intervall: `-IntervalMinutes 30`. Sofort ausführen: `Start-ScheduledTask -TaskName 'Demo-Ticker Import'`. Entfernen: `... -Remove`.
+- **Docker:** Der Dienst `importer` im Compose-Profil `app` läuft rund um die Uhr (siehe „Betrieb im Internet“).
+- **cron** (Linux/macOS): `0 * * * * cd /pfad/zu/demo-ticker && npm run import`
+
+## Datenbank einrichten
+
+Demo-Ticker nutzt PostgreSQL 16, das per Docker bereitgestellt wird (`docker-compose.yml`). Die Verbindung wird ausschließlich über `DATABASE_URL` in `.env` konfiguriert. XAMPP/MariaDB ist kein Ersatz.
+
+### 1. Konfiguration anlegen
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Die Standardwerte passen zur `docker-compose.yml`, es muss nichts geändert werden:
+
+```text
+DATABASE_URL=postgres://demo_ticker:demo_ticker@localhost:5432/demo_ticker
+```
+
+### 2. PostgreSQL starten
+
+Docker Desktop muss laufen (siehe oben).
+
+```powershell
+docker compose up -d postgres
+```
+
+Beim ersten Start lädt Docker das Image `postgres:16-alpine` herunter (einige hundert MB, dauert etwas). Der Container legt Datenbank, Benutzer und Passwort (jeweils `demo_ticker`) selbst an und speichert die Daten im Volume `postgres-data`. Ob er bereit ist, zeigt `docker compose ps` (Status `healthy`).
+
+### 3. Schema anlegen
+
+```powershell
+npm run db:migrate
+```
+
+Das Skript führt alle Dateien `db/NNN_*.sql` in Reihenfolge aus und legt die Tabellen `assemblies`, `assembly_history` und `import_runs` samt Indizes an. Alle Statements sind `IF NOT EXISTS`, der Befehl kann daher beliebig oft wiederholt werden. Bei Erfolg erscheint `Database schema is up to date.`
+
+### 4. Prüfen
+
+```powershell
+docker compose exec postgres psql -U demo_ticker -d demo_ticker -c "\dt"
+```
+
+Die Ausgabe muss beide Tabellen enthalten. Anschließend füllt `npm run import` die Datenbank (siehe oben).
+
+### Stoppen und Zurücksetzen
+
+- `docker compose stop` hält die Datenbank an, die Daten bleiben erhalten. `docker compose up -d postgres` startet sie wieder.
+- `docker compose down -v` löscht Container und Volume und damit **alle Daten**. Danach Schritt 2 und 3 wiederholen.
+
+### Häufige Fehler
+
+- `docker` wird nicht gefunden: Docker Desktop ist nicht installiert oder das Terminal wurde nach der Installation nicht neu geöffnet.
+- `error during connect` / `cannot connect to the Docker daemon`: Docker Desktop ist nicht gestartet.
+- `DATABASE_URL is required`: `.env` fehlt (Schritt 1).
+- `ECONNREFUSED`: Der Container läuft noch nicht (`docker compose ps`).
+- `Passwort-Authentifizierung für Benutzer „demo_ticker“ fehlgeschlagen` (`password authentication failed`) obwohl der Container läuft: Auf Port 5432 lauscht bereits eine andere, lokal installierte PostgreSQL-Instanz und fängt die Verbindung ab. Ohne diese zu beenden, in `.env` einen anderen Host-Port setzen, die Datenbank neu starten und `DATABASE_URL` anpassen:
+
+  ```text
+  POSTGRES_PORT=5433
+  DATABASE_URL=postgres://demo_ticker:demo_ticker@localhost:5433/demo_ticker
+  ```
+
+  ```powershell
+  docker compose up -d postgres
+  ```
 
 ## API und Suche
 
@@ -40,16 +165,82 @@ npm start
 
 - `GET /api/assemblies` – paginierte Suche mit `q`, `dateFrom`, `dateTo`, `plz`, `street`, `page` und `pageSize`
 - `GET /api/assemblies/:id` – Detaildaten inklusive Änderungshistorie
+- `GET /api/import/status` – Ergebnis des letzten Importlaufs und Zeitpunkt des letzten Erfolgs
+- `GET /feed.xml` – Atom-Feed für heute und die nächsten 14 Tage (absolute Links aus `PUBLIC_URL`, sonst aus dem Host-Header)
 
-Während der Entwicklung liefert Vite das Frontend unter `http://localhost:5173` und proxied `/api` an den Node-Server auf Port 3000.
+Während der Entwicklung startet `npm run dev` beides zusammen: die API auf Port 3000 und Vite unter `http://localhost:5173`, das `/api` an den Node-Server weiterreicht. Die Seite erreichst du unter `http://localhost:5173`. Voraussetzung ist eine gefüllte Datenbank (`npm run import`) und ein laufender Datenbank-Container. Mit `Strg+C` werden beide Prozesse beendet. Nur das Frontend startet `npm run dev:web`; ohne API bleibt die Seite leer.
+
+## Betrieb im Internet
+
+Für den öffentlichen Betrieb sind drei Dinge nötig: HTTPS, ein ausgefülltes Impressum und die Prüfung der Datenschutzerklärung.
+
+### HTTPS
+
+Die Anwendung liefert HTTPS nicht von sich aus mit, ein Zertifikat muss von einer Zertifizierungsstelle kommen (z. B. kostenlos über Let's Encrypt). Es gibt zwei Wege:
+
+- **Node übernimmt TLS:** `TLS_CERT_FILE` und `TLS_KEY_FILE` in `.env` auf die Zertifikatsdateien setzen, dann spricht der Server HTTPS.
+- **Reverse Proxy** (Caddy, nginx, Apache oder der Hoster) beendet TLS und reicht intern HTTP weiter. Dann `TRUST_PROXY=1` setzen, damit der Header `X-Forwarded-Proto` beachtet wird, und mit `FORCE_HTTPS=1` Aufrufe über HTTP automatisch auf HTTPS umleiten.
+
+Über HTTPS sendet der Server zusätzlich `Strict-Transport-Security`. Unabhängig davon setzt er immer eine strenge Content-Security-Policy (alles nur vom eigenen Server, kein Einbetten in fremde Seiten), `nosniff` und `Referrer-Policy: no-referrer`.
+
+### Impressum und Datenschutz
+
+Unter `/impressum` und `/datenschutz` liegen serverseitig erzeugte Seiten. Die Angaben zum Betreiber stehen bewusst nicht im Repository, sondern in `.env`:
+
+```text
+LEGAL_NAME=Vorname Nachname
+LEGAL_STREET=Straße und Hausnummer
+LEGAL_CITY=10115 Berlin
+LEGAL_EMAIL=kontakt@example.org
+LEGAL_PHONE=optional
+LEGAL_HOSTING=Hoster und ob Zugriffsprotokolle geführt werden
+```
+
+Solange eine der ersten vier Angaben fehlt, zeigen beide Seiten einen deutlichen Warnhinweis. Die Texte beschreiben, was die Anwendung tatsächlich tut (keine Cookies, keine Analyse, keine Drittanbieter, Suchanfragen werden nicht gespeichert). **Sie sind keine Rechtsberatung:** Vor der Veröffentlichung müssen sie geprüft und um die Angaben des Hosters ergänzt werden, insbesondere wenn davor ein Proxy oder Dienst Zugriffsprotokolle führt.
+
+Einen Cookie-Banner gibt es bewusst nicht. Die Seite setzt keine Cookies und nutzt weder Local Storage noch Analyse oder eingebundene Dienste Dritter, eine Einwilligung ist daher nicht erforderlich. Sobald so etwas ergänzt wird, muss das geändert werden.
+
+### Docker-Betrieb auf einem Server
+
+Für den Betrieb ohne Node-Installation gibt es ein `Dockerfile` und im Compose-Profil `app` drei Dienste: `migrate` (legt das Schema an), `app` (Server und Frontend) und `importer` (stündlicher Abruf). Die Datenbank ist derselbe Dienst `postgres` wie in der Entwicklung.
+
+```sh
+cp .env.example .env     # LEGAL_*-Angaben und optional PUBLIC_URL eintragen
+docker compose --profile app up -d --build
+```
+
+Die Seite ist dann unter `http://localhost:3000` erreichbar (anderer Port: `APP_PORT=8080` in `.env`). Der Container läuft nicht als root und hat einen Healthcheck. `docker compose up -d postgres` startet weiterhin nur die Datenbank für die Entwicklung. Aktualisieren: `git pull` und den Befehl oben erneut ausführen; die Daten bleiben im Volume `postgres-data` erhalten.
+
+Für ein öffentliches System sollten die Datenbank-Zugangsdaten in `docker-compose.yml` (Benutzer, Passwort `demo_ticker`) geändert und der Datenbank-Port nicht nach außen veröffentlicht werden. TLS beendet ein vorgeschalteter Proxy (siehe HTTPS oben).
+
+### Auslieferung
+
+Der Server komprimiert Texte (Brotli oder gzip), versieht Dateien mit ETag und liefert die versionierten Dateien in `dist/assets/` ein Jahr lang cachebar aus. Das Frontend lädt nur Dateien vom eigenen Server (rund 73 KB komprimiert, keine Bilder, keine externen Schriften).
+
+## Tests
+
+
+```powershell
+npm test
+```
+
+Die Unit-Tests (Normalisierung, Plausibilitätsprüfung, Suchabfrage, Zeitraum-Schnellfilter, HTTP-Header, rechtliche Seiten) brauchen keine Datenbank. `test/server.test.js` startet den echten Server aus dem Build (`npm run build` vorher ausführen, sonst wird der Test übersprungen) und prüft Header, Kompression, Caching, Adressen und Pfadsicherheit. Der Integrationstest `test/import.integration.test.js` prüft den kompletten Importablauf (Neuanlage, Wiederholung ohne Änderung, Änderungshistorie, Entfernung, Wiederherstellung, Abbruch bei zu kleiner Antwort). Er läuft in einem temporären Schema derselben Datenbank und löscht es danach wieder, vorhandene Daten bleiben unberührt. Ist die Datenbank nicht erreichbar, wird er übersprungen.
 
 ## Struktur
 
 - `db/001_initial.sql` – Tabellen `assemblies` und `assembly_history` inklusive Suchindex
+- `db/002_import_runs.sql` – Importprotokoll und Markierung entfernter Einträge
 - `src/import/normalize.js` – API-Normalisierung, Schlüsselbildung und Regex für Dauerversammlungen
-- `src/jobs/import-assemblies.js` – Abruf bzw. Dateiimport und Upsert-Logik
-- `src/api/server.js` – REST-API und Auslieferung des Produktionsbuilds
+- `src/jobs/import-assemblies.js` – Abruf bzw. Dateiimport, Upsert-Logik, Entfernungserkennung, Laufprotokoll
+- `src/jobs/scheduler.js` – zeitgesteuerter Import (`npm run import:schedule`)
+- `src/import/guard.js` – Plausibilitätsprüfung der Quellantwort
+- `src/api/server.js` – REST-API, Routing und Auslieferung des Produktionsbuilds
+- `src/api/http.js` – Sicherheits-Header, Kompression, Caching, HTTPS-Umleitung
+- `src/api/feed.js` – Atom-Feed
+- `Dockerfile`, `docker-compose.yml` – Container für Entwicklung (nur Datenbank) und Betrieb (Profil `app`)
+- `scripts/install-import-task.ps1` – Windows-Aufgabe für den regelmäßigen Import
+- `src/legal/pages.js` – Impressum und Datenschutzerklärung
 - `src/frontend/main.jsx` – Such-/Listenansicht und Detailseite
-- `docker-compose.yml` – lokale PostgreSQL-Instanz
+- `docker-compose.yml` – PostgreSQL-Instanz für die lokale Entwicklung
 
 Geheimnisse gehören ausschließlich in `.env`; die Datei ist nicht versioniert.

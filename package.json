@@ -7,8 +7,10 @@
   "scripts": {
     "test": "node --test",
     "import": "node src/jobs/import-assemblies.js",
+    "import:schedule": "node src/jobs/scheduler.js",
     "db:migrate": "node src/db/migrate.js",
-    "dev": "vite",
+    "dev": "node scripts/dev.js",
+    "dev:web": "vite",
     "build": "vite build",
     "start": "node src/api/server.js"
   },
