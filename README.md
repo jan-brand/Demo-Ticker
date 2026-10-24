@@ -68,7 +68,7 @@ Der Import läuft ohne Zutun regelmäßig, solange dieser Prozess läuft:
 npm run import:schedule
 ```
 
-Er ruft die Quelle sofort und danach alle `IMPORT_INTERVAL_MINUTES` Minuten ab (Standard 60, einstellbar in `.env`) und protokolliert jeden Lauf auf der Konsole. Ein fehlgeschlagener Lauf stoppt den Zeitplan nicht, der nächste Lauf startet planmäßig. Beenden mit `Strg+C`. Ein einzelner Lauf ohne Zeitplan: `npm run import`.
+Er ruft die Quelle sofort und danach alle `IMPORT_INTERVAL_MINUTES` Minuten ab (Standard 60, einstellbar in `.env`) und protokolliert jeden Lauf auf der Konsole. Ein fehlgeschlagener Lauf stoppt den Zeitplan nicht, der nächste Lauf startet planmäßig. Beenden mit `Strg+C`. Ein einzelner Lauf ohne Zeitplan: `npm run import` (nur Abruf) oder `npm run update` (mit Ortsbestimmung).
 
 Jeder Lauf wird in der Tabelle `import_runs` festgehalten (Status, Anzahl neu/geändert/unverändert/entfernt, Fehlermeldung). Der letzte Stand ist über `GET /api/import/status` abrufbar.
 
@@ -80,7 +80,7 @@ Das Archiv schützt sich selbst:
 
 Soll der Import unabhängig von einem offenen Terminal laufen, gibt es drei Wege:
 
-- **Windows-Aufgabe:** Das Skript `scripts/install-import-task.ps1` legt eine Aufgabe „Demo-Ticker Import“ an, die `npm run import` stündlich startet und nach `logs/import.log` schreibt. Die Aufgabe läuft unter deinem Benutzer, solange du angemeldet bist, und braucht einen laufenden Datenbank-Container (Docker Desktop):
+- **Windows-Aufgabe:** Das Skript `scripts/install-import-task.ps1` legt eine Aufgabe „Demo-Ticker Import“ an, die `npm run update` (Import und Ortsbestimmung) stündlich startet und nach `logs/import.log` schreibt. Die Aufgabe läuft unter deinem Benutzer, solange du angemeldet bist, und braucht einen laufenden Datenbank-Container (Docker Desktop):
 
   ```powershell
   powershell -ExecutionPolicy Bypass -File scripts\install-import-task.ps1
@@ -89,6 +89,22 @@ Soll der Import unabhängig von einem offenen Terminal laufen, gibt es drei Wege
   Anderes Intervall: `-IntervalMinutes 30`. Sofort ausführen: `Start-ScheduledTask -TaskName 'Demo-Ticker Import'`. Entfernen: `... -Remove`.
 - **Docker:** Der Dienst `importer` im Compose-Profil `app` läuft rund um die Uhr (siehe „Betrieb im Internet“).
 - **cron** (Linux/macOS): `0 * * * * cd /pfad/zu/demo-ticker && npm run import`
+
+## Karte und Ortsbestimmung
+
+Die Ansicht „Karte“ zeigt die Versammlungen des aktuellen Filters auf einer Berlin-Karte (Markierungen, Cluster mit Anzahl, Zoom per Buttons, Mausrad und Ziehen, Tastaturbedienung). Die Karte ist selbst als SVG gezeichnet: Die Bezirksgrenzen liegen als kleine Datei im Frontend (`src/frontend/berlin-map.js`, 17 KB), es werden **keine Kartenkacheln und keine Dienste Dritter** aus dem Browser geladen. Die Listenansicht bleibt die vollständige Alternative.
+
+Die Quelle liefert keine Koordinaten. Der **Server** ermittelt sie aus Straße, Hausnummer und PLZ über den Geocoder Nominatim (OpenStreetMap). Übermittelt werden nur die öffentlich bekannten Adressen, keine Daten von Besucherinnen und Besuchern. Das passiert automatisch nach jedem Import für neue Einträge (höchstens `GEOCODE_BATCH`, Standard 100, pro Lauf; eine Anfrage pro Sekunde, wie es die Nutzungsregeln verlangen). Das Ergebnis wird gespeichert, jede Adresse wird also nur einmal angefragt.
+
+```powershell
+npm run update      # Import und anschließend Ortsbestimmung für neue Einträge
+npm run geocode     # nur Ortsbestimmung, alle offenen Einträge (beim ersten Mal rund 30 Minuten)
+```
+
+- Ergebnisse außerhalb von Berlin werden verworfen (gleichnamige Straßen in anderen Städten). Einträge ohne Straße oder ohne Treffer erscheinen nicht auf der Karte; die Seite nennt, wie viele es sind. Nicht gefundene Einträge werden nach `GEOCODER_RETRY_DAYS` (7) erneut versucht.
+- Abschalten: `GEOCODING=off` in `.env`. Eigener Geocoder: `GEOCODER_URL`. Kontaktangabe für den User-Agent (die Nominatim-Regeln empfehlen sie): `GEOCODER_CONTACT` in `.env`; sie wird nur gesendet, wenn du sie selbst einträgst.
+- Namensnennung: Die Seite nennt unter der Karte und im Impressum „© OpenStreetMap-Mitwirkende (ODbL)“ sowie die Herkunft der Bezirksgrenzen. Prüfe die Lizenzbedingungen der Bezirksgrenzen (Geoportal Berlin) für deinen Einsatz.
+- Die Grenzen lassen sich neu erzeugen: `node scripts/build-berlin-map.mjs [GeoJSON-Datei oder URL]`.
 
 ## Datenbank einrichten
 
@@ -165,6 +181,7 @@ npm start
 
 - `GET /api/assemblies` – paginierte Suche mit `q`, `dateFrom`, `dateTo`, `plz`, `street`, `page` und `pageSize`
 - `GET /api/assemblies/:id` – Detaildaten inklusive Änderungshistorie
+- `GET /api/map` – kompakte Punkte für die Karte (gleiche Filter wie die Suche, höchstens 2000) samt Anzahl verorteter und nicht verorteter Treffer
 - `GET /api/import/status` – Ergebnis des letzten Importlaufs und Zeitpunkt des letzten Erfolgs
 - `GET /feed.xml` – Atom-Feed für heute und die nächsten 14 Tage (absolute Links aus `PUBLIC_URL`, sonst aus dem Host-Header)
 
@@ -215,7 +232,7 @@ Für ein öffentliches System sollten die Datenbank-Zugangsdaten in `docker-comp
 
 ### Auslieferung
 
-Der Server komprimiert Texte (Brotli oder gzip), versieht Dateien mit ETag und liefert die versionierten Dateien in `dist/assets/` ein Jahr lang cachebar aus. Das Frontend lädt nur Dateien vom eigenen Server (rund 73 KB komprimiert, keine Bilder, keine externen Schriften).
+Der Server komprimiert Texte (Brotli oder gzip), versieht Dateien mit ETag und liefert die versionierten Dateien in `dist/assets/` ein Jahr lang cachebar aus. Das Frontend lädt nur Dateien vom eigenen Server (rund 83 KB komprimiert, keine Bilder, keine externen Schriften).
 
 ## Tests
 
@@ -232,7 +249,11 @@ Die Unit-Tests (Normalisierung, Plausibilitätsprüfung, Suchabfrage, Zeitraum-S
 - `db/002_import_runs.sql` – Importprotokoll und Markierung entfernter Einträge
 - `src/import/normalize.js` – API-Normalisierung, Schlüsselbildung und Regex für Dauerversammlungen
 - `src/jobs/import-assemblies.js` – Abruf bzw. Dateiimport, Upsert-Logik, Entfernungserkennung, Laufprotokoll
-- `src/jobs/scheduler.js` – zeitgesteuerter Import (`npm run import:schedule`)
+- `src/jobs/update.js` – Import plus Ortsbestimmung (`npm run update`), `src/jobs/geocode.js` nur Ortsbestimmung
+- `src/jobs/scheduler.js` – zeitgesteuerter Lauf von `update` (`npm run import:schedule`)
+- `src/geo/geocode.js` – Geocoding mit Nominatim
+- `src/frontend/MapView.jsx`, `mapgeo.js`, `berlin-map.js` – Kartenansicht (SVG) und Rechenkern
+- `scripts/build-berlin-map.mjs` – erzeugt die vereinfachten Bezirksgrenzen
 - `src/import/guard.js` – Plausibilitätsprüfung der Quellantwort
 - `src/api/server.js` – REST-API, Routing und Auslieferung des Produktionsbuilds
 - `src/api/http.js` – Sicherheits-Header, Kompression, Caching, HTTPS-Umleitung

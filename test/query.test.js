@@ -31,3 +31,22 @@ test('count query uses the filter parameters only', () => {
   assert.equal(search.values.slice(0, -2).length, 1);
   assert.doesNotMatch(search.countText, /LIMIT/);
 });
+
+test('map query uses the same filters as the list and only entries with coordinates', async () => {
+  const { buildMapQuery, MAX_MAP_POINTS } = await import('../src/api/query.js');
+  const filters = { q: 'x', dateFrom: '2026-10-24', plz: '10117' };
+  const list = buildAssemblySearch(filters);
+  const map = buildMapQuery(filters);
+  assert.deepEqual(map.values, list.values.slice(0, -2));
+  assert.match(map.text, /lat IS NOT NULL AND lon IS NOT NULL/);
+  assert.match(map.text, new RegExp(`LIMIT ${MAX_MAP_POINTS}`));
+  assert.match(map.countText, /COUNT\(\*\) FILTER/);
+  assert.doesNotMatch(map.text, /\$\d+\s*$/);
+});
+
+test('map query without filters does not restrict the count', async () => {
+  const { buildMapQuery } = await import('../src/api/query.js');
+  const map = buildMapQuery({});
+  assert.deepEqual(map.values, []);
+  assert.match(map.countText, /FROM assemblies\s*$/);
+});

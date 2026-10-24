@@ -8,7 +8,7 @@ import { pool } from '../db/pool.js';
 import { renderLegalPage, renderNotFound } from '../legal/pages.js';
 import { FEED_QUERY, renderFeed } from './feed.js';
 import { httpsRedirectTarget, isSecure, securityHeaders, send, sendFile, sendJson } from './http.js';
-import { buildAssemblySearch } from './query.js';
+import { buildAssemblySearch, buildMapQuery, MAX_MAP_POINTS } from './query.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const frontendRoot = resolve(root, 'dist');
@@ -28,6 +28,20 @@ async function handleAssemblyList(request, response, url) {
       total: count.rows[0].total,
       pages: Math.ceil(count.rows[0].total / search.pageSize),
     },
+  });
+}
+
+async function handleMap(request, response, url) {
+  const map = buildMapQuery(Object.fromEntries(url.searchParams));
+  const [rows, counts] = await Promise.all([pool.query(map.text, map.values), pool.query(map.countText, map.values)]);
+  const { total, located, pending } = counts.rows[0];
+  return sendJson(request, response, 200, {
+    // Compact tuples keep the response small: [id, lat, lon, datum, von, thema, plz, strasseNr]
+    points: rows.rows.map((row) => [Number(row.id), row.lat, row.lon, row.datum, row.von, row.thema, row.plz, row.strasseNr]),
+    total,
+    located,
+    pending,
+    truncated: located > MAX_MAP_POINTS,
   });
 }
 
@@ -106,6 +120,7 @@ async function route(request, response) {
   if (url.pathname.startsWith('/api/')) {
     if (!isRead) return sendJson(request, response, 405, { error: 'Method not allowed' });
     if (url.pathname === '/api/assemblies') return handleAssemblyList(request, response, url);
+    if (url.pathname === '/api/map') return handleMap(request, response, url);
     if (url.pathname === '/api/import/status') return handleImportStatus(request, response);
     const detail = url.pathname.match(/^\/api\/assemblies\/(\d+)$/);
     if (detail) return handleAssemblyDetail(request, response, detail[1]);

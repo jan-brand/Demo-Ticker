@@ -30,7 +30,7 @@ $logDir = Join-Path $projectDir 'logs'
 New-Item -ItemType Directory -Force $logDir | Out-Null
 
 # cmd.exe is used so that stdout and stderr can be appended to a log file with a timestamp line.
-$command = "cd /d `"$projectDir`" && echo [%DATE% %TIME%] import started >> logs\import.log && `"$node`" src\jobs\import-assemblies.js >> logs\import.log 2>&1"
+$command = "cd /d `"$projectDir`" && echo [%DATE% %TIME%] import started >> logs\import.log && `"$node`" src\jobs\update.js >> logs\import.log 2>&1"
 $action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/c $command" -WorkingDirectory $projectDir
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew `

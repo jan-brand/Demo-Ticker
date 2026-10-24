@@ -51,7 +51,8 @@ ${operatorBlock(env)}
 <h2>Herkunft der Daten</h2>
 <p>Die angezeigten Versammlungen stammen aus den öffentlich abrufbaren Angaben der Polizei Berlin
 (<a href="${SOURCE_URL}" rel="noopener">Versammlungen und Aufzüge</a>). Demo-Ticker archiviert diese Angaben und
-vermerkt spätere Änderungen. Für die Richtigkeit, Vollständigkeit und Aktualität ist ausschließlich die Quelle maßgeblich.</p>`;
+vermerkt spätere Änderungen. Für die Richtigkeit, Vollständigkeit und Aktualität ist ausschließlich die Quelle maßgeblich.</p>
+<p>Die Bezirksgrenzen der Karte stammen aus dem Geoportal Berlin (ALKIS). Die Positionen der Versammlungen werden aus den Adressen mit Nominatim ermittelt, © OpenStreetMap-Mitwirkende (<a href="https://www.openstreetmap.org/copyright" rel="noopener">ODbL</a>).</p>`;
 }
 
 function datenschutz(env) {
@@ -69,7 +70,7 @@ ${contactBlock(env)}
 <ul>
   <li>Diese Website setzt keine Cookies und speichert keine Daten im Browser.</li>
   <li>Es gibt keine Webanalyse, keine Werbung und keine eingebundenen Dienste Dritter.</li>
-  <li>Schriften, Skripte und Stile werden ausschließlich vom eigenen Server geladen.</li>
+  <li>Schriften, Skripte, Stile und die Karte werden ausschließlich vom eigenen Server geladen.</li>
   <li>Suchanfragen werden verarbeitet, aber nicht gespeichert.</li>
 </ul>
 <p>Weil keine Cookies oder vergleichbaren Speicherzugriffe stattfinden, die eine Einwilligung erfordern, gibt es keinen Cookie-Banner.</p>
@@ -85,6 +86,10 @@ ${hosting}
 <h2>Archivierte Versammlungsdaten</h2>
 <p>Demo-Ticker speichert die von der Polizei Berlin veröffentlichten Angaben zu Versammlungen (Datum, Zeit, Thema, Ort, Strecke) samt Änderungshistorie. Themenangaben können im Einzelfall Hinweise auf Personen oder Organisationen enthalten. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO; das berechtigte Interesse liegt in der nachvollziehbaren Dokumentation öffentlich bekannt gemachter Versammlungen. Einträge, die die Quelle nicht mehr nennt, bleiben als „aus der Quelle entfernt“ markiert erhalten.</p>
 
+<h2>Karte und Ortsbestimmung</h2>
+<p>Die Kartenansicht wird vollständig auf diesem Server erzeugt. Es werden keine Kartenkacheln, Schriften oder Skripte von Dritten geladen, Ihre IP-Adresse gelangt dadurch an keinen Kartenanbieter.</p>
+<p>Um Versammlungen auf der Karte zu zeigen, ermittelt der Server die Koordinaten der veröffentlichten Adressen (Straße, Hausnummer, Postleitzahl) über den Geocoding-Dienst Nominatim der OpenStreetMap-Foundation. Übermittelt werden ausschließlich diese öffentlich bekannten Adressen, keine Angaben über Besucherinnen und Besucher. Die Ergebnisse stammen aus Daten der OpenStreetMap-Mitwirkenden (<a href="https://www.openstreetmap.org/copyright" rel="noopener">ODbL</a>). Die Funktion kann der Betreiber abschalten.</p>
+
 <h2>Ihre Rechte</h2>
 <p>Sie haben das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch gegen die Verarbeitung (Art. 15 bis 21 DSGVO). Wenden Sie sich dafür an die oben genannte Kontaktadresse. Außerdem können Sie sich bei einer Datenschutzaufsichtsbehörde beschweren, zum Beispiel bei der ${AUTHORITY}.</p>`;
 }
@@ -97,6 +102,7 @@ export function renderPage({ title, body, stylesheet }) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>${escapeHtml(title)} – Demo-Ticker</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%23264653%27/%3E%3Crect x=%277%27 y=%2720%27 width=%2718%27 height=%274%27 fill=%27%23e9c46a%27/%3E%3Ccircle cx=%2716%27 cy=%2711%27 r=%275%27 fill=%27%232a9d8f%27/%3E%3C/svg%3E">
   <link rel="stylesheet" href="${escapeHtml(stylesheet)}">
   <link rel="alternate" type="application/atom+xml" title="Demo-Ticker: heute und die nächsten 14 Tage" href="/feed.xml">
 </head>

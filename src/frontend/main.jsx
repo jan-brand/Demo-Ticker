@@ -1,28 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import { formatDate, formatDay, formatTimeRange } from './format.js';
+import { MapView } from './MapView.jsx';
 import { isoDate, quickRanges } from './ranges.js';
 
 const SOURCE_URL = 'https://www.berlin.de/polizei/service/versammlungsbehoerde/versammlungen-aufzuege/';
 const LIST_TITLE = 'Berliner Versammlungen heute und demnächst – Demo-Ticker';
-
-function formatDate(value) {
-  return value ? new Intl.DateTimeFormat('de-DE').format(new Date(`${value}T00:00:00`)) : 'Unbekanntes Datum';
-}
-
-function formatTime(value) {
-  return value ? String(value).slice(0, 5) : '';
-}
-
-function formatDay(value) {
-  return new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${value}T00:00:00`));
-}
-
-function formatTimeRange(assembly) {
-  const from = formatTime(assembly.von);
-  const to = formatTime(assembly.bis);
-  return from && to ? `${from}–${to}` : from || 'Zeit offen';
-}
 
 // The API returns assemblies sorted by date, so consecutive entries with the same date form one day.
 function groupByDay(assemblies) {
@@ -163,6 +147,8 @@ function Footer() {
 
 function App() {
   const [filters, setFilters] = useState(defaultFilters);
+  const [applied, setApplied] = useState(filters);
+  const [mode, setMode] = useState(() => (new URLSearchParams(window.location.search).get('ansicht') === 'karte' ? 'map' : 'list'));
   const [importStatus, setImportStatus] = useState(null);
   const [assemblies, setAssemblies] = useState([]);
   const [pagination, setPagination] = useState(null);
@@ -173,6 +159,7 @@ function App() {
   const search = async (page = 1, activeFilters = filters, keepError = false) => {
     setLoading(true);
     if (!keepError) setError('');
+    setApplied(activeFilters);
     try {
       const params = new URLSearchParams({ ...activeFilters, page: String(page) });
       const response = await fetch(`/api/assemblies?${params}`);
@@ -226,10 +213,17 @@ function App() {
     await loadDetail(id);
   };
 
+  const listUrl = (nextMode) => (nextMode === 'map' ? '/?ansicht=karte' : '/');
+
+  const changeMode = (nextMode) => {
+    setMode(nextMode);
+    window.history.replaceState(window.history.state, '', listUrl(nextMode));
+  };
+
   const back = () => {
     if (window.history.state?.fromList) window.history.back();
     else {
-      window.history.replaceState(null, '', '/');
+      window.history.replaceState(null, '', listUrl(mode));
       setSelected(null);
     }
   };
@@ -259,10 +253,15 @@ function App() {
         {selected ? <Detail assembly={selected} onBack={back} /> : (
           <>
             <SearchForm filters={filters} onRange={applyRange} onReset={reset} onChange={(key, value) => setFilters({ ...filters, [key]: value })} onSubmit={(event) => { event.preventDefault(); search(); }} />
-            {loading
+            <div className="view-toggle" role="group" aria-label="Ansicht">
+              <button type="button" aria-pressed={mode === 'list'} className={mode === 'list' ? 'active' : ''} onClick={() => changeMode('list')}>Liste</button>
+              <button type="button" aria-pressed={mode === 'map'} className={mode === 'map' ? 'active' : ''} onClick={() => changeMode('map')}>Karte</button>
+            </div>
+            {mode === 'map' && <MapView filters={applied} onSelect={select} />}
+            {mode === 'list' && (loading
               ? <p role="status">Lade Einträge …</p>
-              : <><p className="result-count" role="status">{pagination?.total ?? 0} Einträge</p><AssemblyList assemblies={assemblies} onSelect={select} /></>}
-            {pagination?.pages > 1 && (
+              : <><p className="result-count" role="status">{pagination?.total ?? 0} Einträge</p><AssemblyList assemblies={assemblies} onSelect={select} /></>)}
+            {mode === 'list' && pagination?.pages > 1 && (
               <nav className="pagination" aria-label="Seiten">
                 <button type="button" className="secondary" disabled={pagination.page <= 1} onClick={() => search(pagination.page - 1)}>Vorherige Seite</button>
                 <span>Seite {pagination.page} von {pagination.pages}</span>

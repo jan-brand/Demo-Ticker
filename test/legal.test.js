@@ -34,6 +34,8 @@ test('privacy page states the facts and has a valid document skeleton', () => {
   assert.match(html, /<title>Datenschutzerklärung – Demo-Ticker<\/title>/);
   assert.match(html, /keine Cookies/);
   assert.match(html, /Art\. 6 Abs\. 1 lit\. f DSGVO/);
+  assert.match(html, /Nominatim/);
+  assert.match(html, /keine Kartenkacheln/);
   assert.equal((html.match(/<h1>/g) ?? []).length, 1);
 });
 
