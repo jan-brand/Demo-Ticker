@@ -52,6 +52,8 @@ test('public paths: health check always, legal pages unless protected', () => {
     assert.equal(isPublicPath('/healthz', config), true);
     for (const path of ['/', '/api/assemblies', '/api/map', '/feed.xml', '/versammlung/1', '/assets/app.js']) assert.equal(isPublicPath(path, config), false, path);
   }
+  for (const path of ['/nav.js', '/assets/index-abc123.css', '/assets/dm-sans-latin-Bf69Tn_J.woff2']) assert.equal(isPublicPath(path, closed), true, path);
+  for (const path of ['/assets/index-abc123.js', '/assets/../secret.css', '/api/map', '/nav.js.map']) assert.equal(isPublicPath(path, closed), false, path);
   assert.equal(isPublicPath('/impressum', open), true);
   assert.equal(isPublicPath('/datenschutz/', open), true);
   assert.equal(isPublicPath('/impressum', closed), false);

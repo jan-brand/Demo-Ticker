@@ -60,6 +60,15 @@ test('server with login: everything is protected except health check and legal p
     assert.equal((await server.get(asset, basic('anna', 'geheim'))).status, 200);
   });
 
+  await t.test('style sheet, fonts and drawer script are public so the public legal pages are styled', async () => {
+    const html = await (await server.get('/impressum')).text();
+    const css = html.match(/href="(\/assets\/[^"]+\.css)"/)[1];
+    assert.equal((await server.get(css)).status, 200);
+    assert.equal((await server.get('/nav.js')).status, 200);
+    const font = (await (await server.get(css)).text()).match(/url\((\/assets\/[^)]+\.woff2)\)/)[1];
+    assert.equal((await server.get(font)).status, 200);
+  });
+
   await t.test('health check and legal pages stay public', async () => {
     assert.equal((await server.get('/healthz')).status, 200);
     assert.equal((await server.get('/impressum')).status, 200);

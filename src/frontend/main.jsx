@@ -1,12 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import { SOURCE_URL } from '../shared/nav.js';
 import { formatDate, formatDay, formatTimeRange } from './format.js';
+import { describeChange } from './history.js';
+import { Icon } from './Icon.jsx';
 import { MapView } from './MapView.jsx';
 import { isoDate, quickRanges } from './ranges.js';
+import { AppShell } from './Shell.jsx';
 
-const SOURCE_URL = 'https://www.berlin.de/polizei/service/versammlungsbehoerde/versammlungen-aufzuege/';
 const LIST_TITLE = 'Berliner Versammlungen heute und demnächst – Demo-Ticker';
+const PAGE_TITLE = 'Versammlungen und Aufzüge in Berlin';
 
 // The API returns assemblies sorted by date, so consecutive entries with the same date form one day.
 function groupByDay(assemblies) {
@@ -21,56 +25,73 @@ function groupByDay(assemblies) {
 
 const defaultFilters = () => ({ q: '', dateFrom: isoDate(new Date()), dateTo: '', plz: '', street: '' });
 const assemblyIdFromPath = () => window.location.pathname.match(/^\/versammlung\/(\d+)$/)?.[1] ?? null;
+const listUrl = (mode) => (mode === 'map' ? '/?ansicht=karte' : '/');
 
 function activeRange(filters) {
   return quickRanges().find((range) => range.dateFrom === filters.dateFrom && range.dateTo === filters.dateTo)?.id;
 }
 
-function ImportStatus({ status }) {
-  if (!status?.lastSuccessAt) return <p className="import-status">Noch kein erfolgreicher Datenimport.</p>;
-  const failed = status.latest?.status === 'failed';
+function PageHead({ title, children, failed = false }) {
   return (
-    <p className="import-status">
-      Stand der Daten: {new Date(status.lastSuccessAt).toLocaleString('de-DE')}
-      {failed && <span className="import-failed"> · letzter Abruf fehlgeschlagen</span>}
-    </p>
+    <div className="page-head">
+      <div>
+        <h1 className="page-title">{title}</h1>
+        {children && <p className={`page-desc ${failed ? 'is-failed' : ''}`}>{children}</p>}
+      </div>
+    </div>
   );
 }
 
-function SearchForm({ filters, onChange, onSubmit, onRange, onReset }) {
+function importDescription(status) {
+  if (!status?.lastSuccessAt) return status ? 'Noch kein erfolgreicher Datenimport.' : null;
+  const stand = `Stand der Daten: ${new Date(status.lastSuccessAt).toLocaleString('de-DE')}`;
+  return status.latest?.status === 'failed' ? `${stand} · letzter Abruf fehlgeschlagen` : stand;
+}
+
+function FilterCard({ filters, loading, onChange, onSubmit, onRange, onReset }) {
   const current = activeRange(filters);
   return (
-    <form className="search-form" onSubmit={onSubmit} role="search">
-      <div className="quick-ranges" role="group" aria-label="Zeitraum">
+    <section className="card" aria-label="Filter">
+      <div className="tabs" role="group" aria-label="Zeitraum">
         {quickRanges().map((range) => (
-          <button key={range.id} type="button" aria-pressed={current === range.id} className={current === range.id ? 'active' : ''} onClick={() => onRange(range)}>{range.label}</button>
+          <button key={range.id} type="button" className="tab" aria-pressed={current === range.id} onClick={() => onRange(range)}>{range.label}</button>
         ))}
       </div>
-      <label className="field-wide">
-        Suchbegriff
-        <input type="search" value={filters.q} onChange={(event) => onChange('q', event.target.value)} placeholder="Thema oder Straße" />
-      </label>
-      <label>
-        Von
-        <input type="date" value={filters.dateFrom} onChange={(event) => onChange('dateFrom', event.target.value)} />
-      </label>
-      <label>
-        Bis
-        <input type="date" value={filters.dateTo} onChange={(event) => onChange('dateTo', event.target.value)} />
-      </label>
-      <label>
-        PLZ
-        <input inputMode="numeric" autoComplete="postal-code" value={filters.plz} onChange={(event) => onChange('plz', event.target.value)} placeholder="10117" />
-      </label>
-      <label>
-        Straße
-        <input value={filters.street} onChange={(event) => onChange('street', event.target.value)} placeholder="Unter den Linden" />
-      </label>
-      <div className="form-actions">
-        <button type="submit" className="primary">Suchen</button>
-        <button type="button" className="secondary" onClick={onReset}>Zurücksetzen</button>
-      </div>
-    </form>
+      <form className="search-form" onSubmit={onSubmit} role="search">
+        <div className="fields">
+          <label className="field field-wide">
+            <span className="field-label">Suchbegriff</span>
+            <input className="input" type="search" value={filters.q} onChange={(event) => onChange('q', event.target.value)} placeholder="Thema oder Straße" />
+          </label>
+          <label className="field">
+            <span className="field-label">Von</span>
+            <input className="input" type="date" value={filters.dateFrom} onChange={(event) => onChange('dateFrom', event.target.value)} />
+          </label>
+          <label className="field">
+            <span className="field-label">Bis</span>
+            <input className="input" type="date" value={filters.dateTo} onChange={(event) => onChange('dateTo', event.target.value)} />
+          </label>
+          <label className="field">
+            <span className="field-label">PLZ</span>
+            <input className="input" inputMode="numeric" autoComplete="postal-code" value={filters.plz} onChange={(event) => onChange('plz', event.target.value)} placeholder="10117" />
+          </label>
+          <label className="field">
+            <span className="field-label">Straße</span>
+            <input className="input" value={filters.street} onChange={(event) => onChange('street', event.target.value)} placeholder="Unter den Linden" />
+          </label>
+        </div>
+        <div className="form-actions">
+          <button type="submit" className="btn btn-primary" aria-busy={loading}>
+            <Icon name={loading ? 'LoaderCircle' : 'Search'} className={loading ? 'spinner' : ''} />
+            Suchen
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={onReset}>
+            <Icon name="RotateCcw" />
+            Zurücksetzen
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }
 
@@ -79,14 +100,18 @@ function AssemblyRow({ assembly, href, onSelect }) {
   return (
     <li>
       <article className="row">
-        <p className="row-time">{formatTimeRange(assembly)}</p>
+        <p className="row-time tabular">{formatTimeRange(assembly)}</p>
         <div className="row-body">
-          <h3>
+          <h3 className="card-title">
             <a className="row-link" href={href} onClick={(event) => { event.preventDefault(); onSelect(assembly.id); }}>{assembly.thema || 'Ohne Thema'}</a>
           </h3>
           <p className="row-place">{place || 'Kein Ort angegeben'}</p>
-          {assembly.isRecurring && <span className="tag">Dauerversammlung</span>}
-          {assembly.removedAt && <span className="tag tag-removed">Aus der Quelle entfernt</span>}
+          {(assembly.isRecurring || assembly.removedAt) && (
+            <div className="badges">
+              {assembly.isRecurring && <span className="badge badge-info">Dauerversammlung</span>}
+              {assembly.removedAt && <span className="badge badge-error">Aus der Quelle entfernt</span>}
+            </div>
+          )}
         </div>
       </article>
     </li>
@@ -96,10 +121,40 @@ function AssemblyRow({ assembly, href, onSelect }) {
 function AssemblyList({ assemblies, onSelect }) {
   return groupByDay(assemblies).map((day) => (
     <section className="day" key={day.datum}>
-      <h2>{formatDay(day.datum)}</h2>
-      <ul className="rows">{day.items.map((assembly) => <AssemblyRow key={assembly.id} assembly={assembly} href={`/versammlung/${assembly.id}`} onSelect={onSelect} />)}</ul>
+      <h2 className="section-title day-title">{formatDay(day.datum)}</h2>
+      <ul className="rows card">{day.items.map((assembly) => <AssemblyRow key={assembly.id} assembly={assembly} href={`/versammlung/${assembly.id}`} onSelect={onSelect} />)}</ul>
     </section>
   ));
+}
+
+function ListSkeleton() {
+  return (
+    <div className="card rows" aria-hidden="true">
+      {Array.from({ length: 6 }, (_, index) => (
+        <div className="skeleton-row" key={index}>
+          <span className="skeleton skeleton-w-80" />
+          <div className="skeleton-lines">
+            <span className="skeleton skeleton-h-18 skeleton-w-80" />
+            <span className="skeleton skeleton-w-40" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ onReset }) {
+  return (
+    <div className="empty">
+      <Icon name="SearchX" size={24} />
+      <h2>Keine Einträge gefunden</h2>
+      <p>Für diese Filter gibt es keine Versammlungen. Zeitraum oder Suchbegriff lassen sich ändern.</p>
+      <button type="button" className="btn btn-secondary" onClick={onReset}>
+        <Icon name="RotateCcw" />
+        Zurücksetzen
+      </button>
+    </div>
+  );
 }
 
 function Detail({ assembly, onBack }) {
@@ -111,37 +166,46 @@ function Detail({ assembly, onBack }) {
 
   return (
     <section>
-      <button type="button" className="secondary back" onClick={onBack}>Zurück zur Suche</button>
-      <article className="detail">
-        <p className="detail-date">{formatDay(assembly.datum)}, {formatTimeRange(assembly)}</p>
-        <h2 ref={heading} tabIndex={-1}>{assembly.thema || 'Ohne Thema'}</h2>
-        <dl>
-          <dt>PLZ</dt><dd>{assembly.plz || '—'}</dd>
-          <dt>Ort</dt><dd>{assembly.strasseNr || '—'}</dd>
-          <dt>Aufzugsstrecke</dt><dd>{assembly.aufzugsstrecke || '—'}</dd>
-        </dl>
-        {assembly.removedAt && <p className="notice">Diese Versammlung wird seit {new Date(assembly.removedAt).toLocaleString('de-DE')} nicht mehr von der Quelle gelistet.</p>}
-        {assembly.isRecurring && <p className="notice">Dauerversammlung{assembly.recurringStart ? ` vom ${formatDate(assembly.recurringStart)}` : ''}{assembly.recurringEnd ? ` bis ${formatDate(assembly.recurringEnd)}` : ''}.</p>}
-        <p><a className="button-link" href={SOURCE_URL} rel="noopener">Offizielle Quelle bei der Polizei Berlin</a></p>
-        <h3>Änderungshistorie</h3>
-        {assembly.history.length
-          ? <ul className="history">{assembly.history.map((entry) => <li key={entry.id}>{new Date(entry.changedAt).toLocaleString('de-DE')}<pre>{JSON.stringify(entry.diff, null, 2)}</pre></li>)}</ul>
-          : <p>Noch keine Änderungen erkannt.</p>}
-      </article>
+      <button type="button" className="btn btn-secondary back" onClick={onBack}>
+        <Icon name="ArrowLeft" />
+        Zurück zur Suche
+      </button>
+      <div className="page-head">
+        <div>
+          <h1 className="page-title" ref={heading} tabIndex={-1}>{assembly.thema || 'Ohne Thema'}</h1>
+          <p className="page-desc">{formatDay(assembly.datum)}, {formatTimeRange(assembly)}</p>
+        </div>
+      </div>
+      <div className="detail-stack">
+        {assembly.removedAt && (
+          <p className="notice"><Icon name="Info" /><span>Diese Versammlung wird seit {new Date(assembly.removedAt).toLocaleString('de-DE')} nicht mehr von der Quelle gelistet.</span></p>
+        )}
+        {assembly.isRecurring && (
+          <p className="notice"><Icon name="Info" /><span>Dauerversammlung{assembly.recurringStart ? ` vom ${formatDate(assembly.recurringStart)}` : ''}{assembly.recurringEnd ? ` bis ${formatDate(assembly.recurringEnd)}` : ''}.</span></p>
+        )}
+        <div className="card">
+          <dl className="facts">
+            <dt>PLZ</dt><dd>{assembly.plz || '—'}</dd>
+            <dt>Ort</dt><dd>{assembly.strasseNr || '—'}</dd>
+            <dt>Aufzugsstrecke</dt><dd>{assembly.aufzugsstrecke || '—'}</dd>
+          </dl>
+        </div>
+        <p><a className="btn btn-secondary" href={SOURCE_URL} rel="noopener"><Icon name="ExternalLink" />Offizielle Quelle bei der Polizei Berlin</a></p>
+        <section className="card">
+          <h2 className="card-title">Änderungshistorie</h2>
+          {assembly.history.length ? (
+            <ul className="history">
+              {assembly.history.map((entry) => (
+                <li key={entry.id}>
+                  <span className="text-meta">{new Date(entry.changedAt).toLocaleString('de-DE')}</span>
+                  <ul>{describeChange(entry.diff).map((line) => <li key={line}>{line}</li>)}</ul>
+                </li>
+              ))}
+            </ul>
+          ) : <p>Noch keine Änderungen erkannt.</p>}
+        </section>
+      </div>
     </section>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="site-footer">
-      <nav aria-label="Rechtliches und Quelle">
-        <a href="/impressum">Impressum</a>
-        <a href="/datenschutz">Datenschutz</a>
-        <a href="/feed.xml">Feed (Atom)</a>
-        <a href={SOURCE_URL} rel="noopener">Datenquelle: Polizei Berlin</a>
-      </nav>
-    </footer>
   );
 }
 
@@ -213,11 +277,14 @@ function App() {
     await loadDetail(id);
   };
 
-  const listUrl = (nextMode) => (nextMode === 'map' ? '/?ansicht=karte' : '/');
-
   const changeMode = (nextMode) => {
     setMode(nextMode);
-    window.history.replaceState(window.history.state, '', listUrl(nextMode));
+    if (selected || assemblyIdFromPath()) {
+      window.history.pushState(null, '', listUrl(nextMode));
+      setSelected(null);
+    } else {
+      window.history.replaceState(window.history.state, '', listUrl(nextMode));
+    }
   };
 
   const back = () => {
@@ -240,39 +307,50 @@ function App() {
     search(1, next);
   };
 
+  const description = importDescription(importStatus);
+
   return (
-    <>
-      <a className="skip-link" href="#inhalt">Zum Inhalt springen</a>
-      <header className="masthead">
-        <h1>Demo-Ticker</h1>
-        <p>Versammlungen und Aufzüge in Berlin</p>
-        <ImportStatus status={importStatus} />
-      </header>
-      <main id="inhalt" tabIndex={-1}>
-        {error && <p className="error" role="alert">{error}</p>}
-        {selected ? <Detail assembly={selected} onBack={back} /> : (
-          <>
-            <SearchForm filters={filters} onRange={applyRange} onReset={reset} onChange={(key, value) => setFilters({ ...filters, [key]: value })} onSubmit={(event) => { event.preventDefault(); search(); }} />
-            <div className="view-toggle" role="group" aria-label="Ansicht">
-              <button type="button" aria-pressed={mode === 'list'} className={mode === 'list' ? 'active' : ''} onClick={() => changeMode('list')}>Liste</button>
-              <button type="button" aria-pressed={mode === 'map'} className={mode === 'map' ? 'active' : ''} onClick={() => changeMode('map')}>Karte</button>
-            </div>
-            {mode === 'map' && <MapView filters={applied} onSelect={select} />}
-            {mode === 'list' && (loading
-              ? <p role="status">Lade Einträge …</p>
-              : <><p className="result-count" role="status">{pagination?.total ?? 0} Einträge</p><AssemblyList assemblies={assemblies} onSelect={select} /></>)}
-            {mode === 'list' && pagination?.pages > 1 && (
-              <nav className="pagination" aria-label="Seiten">
-                <button type="button" className="secondary" disabled={pagination.page <= 1} onClick={() => search(pagination.page - 1)}>Vorherige Seite</button>
-                <span>Seite {pagination.page} von {pagination.pages}</span>
-                <button type="button" className="secondary" disabled={pagination.page >= pagination.pages} onClick={() => search(pagination.page + 1)}>Nächste Seite</button>
-              </nav>
-            )}
-          </>
-        )}
-      </main>
-      <Footer />
-    </>
+    <AppShell areaName={mode === 'map' ? 'Karte' : 'Liste'} activeNav={mode} onSelectNav={changeMode}>
+      {error && <p className="alert" role="alert"><Icon name="CircleAlert" /><span>{error}</span></p>}
+      {selected ? <Detail assembly={selected} onBack={back} /> : (
+        <>
+          <PageHead title={PAGE_TITLE} failed={importStatus?.latest?.status === 'failed'}>{description}</PageHead>
+          <FilterCard
+            filters={filters}
+            loading={loading}
+            onRange={applyRange}
+            onReset={reset}
+            onChange={(key, value) => setFilters({ ...filters, [key]: value })}
+            onSubmit={(event) => { event.preventDefault(); search(); }}
+          />
+          {mode === 'map' && <div className="result-bar" />}
+          {mode === 'map' && <MapView filters={applied} onSelect={select} onReset={reset} />}
+          {mode === 'list' && (
+            <>
+              <div className="result-bar">
+                <p className="text-description" role="status">{loading ? 'Lade Einträge …' : `${pagination?.total ?? 0} Einträge`}</p>
+              </div>
+              {loading && <ListSkeleton />}
+              {!loading && assemblies.length > 0 && <AssemblyList assemblies={assemblies} onSelect={select} />}
+              {!loading && assemblies.length === 0 && !error && <EmptyState onReset={reset} />}
+              {pagination?.pages > 1 && (
+                <nav className="pagination" aria-label="Seiten">
+                  <button type="button" className="btn btn-secondary" disabled={pagination.page <= 1} onClick={() => search(pagination.page - 1)}>
+                    <Icon name="ChevronLeft" />
+                    Vorherige Seite
+                  </button>
+                  <span className="text-description">Seite {pagination.page} von {pagination.pages}</span>
+                  <button type="button" className="btn btn-secondary" disabled={pagination.page >= pagination.pages} onClick={() => search(pagination.page + 1)}>
+                    Nächste Seite
+                    <Icon name="ChevronRight" />
+                  </button>
+                </nav>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </AppShell>
   );
 }
 

@@ -8,6 +8,7 @@ export default defineConfig({
       '/api': 'http://localhost:3000',
       '/impressum': 'http://localhost:3000',
       '/datenschutz': 'http://localhost:3000',
+      '/nav.js': 'http://localhost:3000',
     },
   },
 });

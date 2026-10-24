@@ -1,3 +1,6 @@
+import { APP_NAME, NAV_MAIN, NAV_SECONDARY } from '../shared/nav.js';
+import { iconSvg } from './icons.js';
+
 // Server-rendered Impressum and Datenschutzerklärung. The operator's details come from the environment,
 // so no personal data is stored in the repository. Missing details are shown as a visible warning.
 
@@ -40,12 +43,12 @@ function warningBlock(env) {
   const missing = missingLegalFields(env);
   if (!missing.length) return '';
   const list = missing.map(({ key, label }) => `<li>${escapeHtml(label)} (<code>${key}</code>)</li>`).join('');
-  return `<div class="notice" role="alert"><strong>Angaben des Betreibers fehlen.</strong> Diese Seite darf so nicht veröffentlicht werden. Folgende Werte in der <code>.env</code> ergänzen:<ul>${list}</ul></div>`;
+  return `<div class="alert" role="alert">${iconSvg('CircleAlert', 16)}<div><strong>Angaben des Betreibers fehlen.</strong> Diese Seite darf so nicht veröffentlicht werden. Folgende Werte in der <code>.env</code> ergänzen:<ul>${list}</ul></div></div>`;
 }
 
 function impressum(env) {
   return `
-<h1>Impressum</h1>
+<h1 class="page-title">Impressum</h1>
 ${warningBlock(env)}
 <h2>Angaben nach § 5 DDG</h2>
 ${operatorBlock(env)}
@@ -73,7 +76,7 @@ function datenschutz(env) {
     ? `<p>${escapeHtml(env.LEGAL_HOSTING)}</p>`
     : '<p>Der Betreiber ergänzt hier, bei welchem Anbieter die Anwendung gehostet wird und ob dieser Zugriffsprotokolle führt (Angabe über <code>LEGAL_HOSTING</code> in der <code>.env</code>).</p>';
   return `
-<h1>Datenschutzerklärung</h1>
+<h1 class="page-title">Datenschutzerklärung</h1>
 ${warningBlock(env)}
 <h2>Verantwortlicher</h2>
 ${operatorBlock(env)}
@@ -112,7 +115,16 @@ ${loginSection(env)}
 <p>Sie haben das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch gegen die Verarbeitung (Art. 15 bis 21 DSGVO). Wenden Sie sich dafür an die oben genannte Kontaktadresse. Außerdem können Sie sich bei einer Datenschutzaufsichtsbehörde beschweren, zum Beispiel bei der ${AUTHORITY}.</p>`;
 }
 
-export function renderPage({ title, body, stylesheet }) {
+const FAVICON = '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%236C584C%27/%3E%3Crect x=%277%27 y=%2720%27 width=%2718%27 height=%274%27 fill=%27%23F0EAD2%27/%3E%3Ccircle cx=%2716%27 cy=%2711%27 r=%275%27 fill=%27%23D08C60%27/%3E%3C/svg%3E">';
+
+function navItem(item, activeId) {
+  const current = item.id === activeId ? ' aria-current="page"' : '';
+  const rel = item.external ? ' rel="noopener"' : '';
+  return `<li><a class="nav-item" href="${escapeHtml(item.href)}" data-tooltip="${escapeHtml(item.label)}"${current}${rel}>${iconSvg(item.icon, 18)}<span class="nav-label">${escapeHtml(item.label)}</span></a></li>`;
+}
+
+// Same sidebar, header and content frame as the React app.
+export function renderPage({ title, body, stylesheet, areaName = title, activeId = '' }) {
   return `<!doctype html>
 <html lang="de">
 <head>
@@ -120,31 +132,45 @@ export function renderPage({ title, body, stylesheet }) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>${escapeHtml(title)} – Demo-Ticker</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%23264653%27/%3E%3Crect x=%277%27 y=%2720%27 width=%2718%27 height=%274%27 fill=%27%23e9c46a%27/%3E%3Ccircle cx=%2716%27 cy=%2711%27 r=%275%27 fill=%27%232a9d8f%27/%3E%3C/svg%3E">
+  ${FAVICON}
   <link rel="stylesheet" href="${escapeHtml(stylesheet)}">
   <link rel="alternate" type="application/atom+xml" title="Demo-Ticker: heute und die nächsten 14 Tage" href="/feed.xml">
 </head>
 <body>
   <a class="skip-link" href="#inhalt">Zum Inhalt springen</a>
-  <header class="masthead"><p class="site-name"><a href="/">Demo-Ticker</a></p></header>
-  <main id="inhalt" class="legal" tabindex="-1">${body}</main>
-  <footer class="site-footer">
-    <nav aria-label="Rechtliches"><a href="/">Startseite</a> <a href="/impressum">Impressum</a> <a href="/datenschutz">Datenschutz</a></nav>
-  </footer>
+  <div class="overlay" data-nav-overlay aria-hidden="true"></div>
+  <aside id="sidebar" class="sidebar" aria-label="Navigation">
+    <div class="sidebar-top">
+      <a class="brand" href="/">${escapeHtml(APP_NAME)}</a>
+      <button type="button" class="icon-button drawer-close" data-menu-close aria-label="Menü schließen">${iconSvg('X', 18)}</button>
+    </div>
+    <nav aria-label="Bereiche"><ul class="nav-list">${NAV_MAIN.map((item) => navItem(item, activeId)).join('')}</ul></nav>
+    <nav class="nav-secondary" aria-label="Weitere Links"><ul class="nav-list">${NAV_SECONDARY.map((item) => navItem(item, activeId)).join('')}</ul></nav>
+  </aside>
+  <div class="app-main">
+    <header class="app-header">
+      <button type="button" class="icon-button menu-button" data-menu-button aria-label="Menü öffnen" aria-expanded="false" aria-controls="sidebar">${iconSvg('Menu', 18)}</button>
+      <p class="header-title">${escapeHtml(areaName)}</p>
+    </header>
+    <main id="inhalt" class="content" tabindex="-1">
+      <div class="content-inner"><div class="legal">${body}</div></div>
+    </main>
+  </div>
+  <script type="module" src="/nav.js"></script>
 </body>
 </html>`;
 }
 
 export function renderLegalPage(kind, { env = process.env, stylesheet }) {
-  if (kind === 'impressum') return renderPage({ title: 'Impressum', body: impressum(env), stylesheet });
-  if (kind === 'datenschutz') return renderPage({ title: 'Datenschutzerklärung', body: datenschutz(env), stylesheet });
+  if (kind === 'impressum') return renderPage({ title: 'Impressum', body: impressum(env), stylesheet, activeId: 'impressum' });
+  if (kind === 'datenschutz') return renderPage({ title: 'Datenschutzerklärung', areaName: 'Datenschutz', body: datenschutz(env), stylesheet, activeId: 'datenschutz' });
   throw new Error(`Unknown legal page: ${kind}`);
 }
 
 export function renderNotFound({ stylesheet }) {
   return renderPage({
     title: 'Seite nicht gefunden',
-    body: '<h1>Seite nicht gefunden</h1><p>Diese Adresse gibt es nicht. <a href="/">Zurück zur Übersicht</a></p>',
+    body: '<h1 class="page-title">Seite nicht gefunden</h1><p>Diese Adresse gibt es nicht. <a href="/">Zurück zur Übersicht</a></p>',
     stylesheet,
   });
 }

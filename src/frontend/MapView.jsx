@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { formatDay, formatTime } from './format.js';
+import { Icon } from './Icon.jsx';
 import { centerView, clampView, clusterPoints, FULL_VIEW, MAP, toPoint, zoomView } from './mapgeo.js';
 
 const PANEL_LIMIT = 10;
@@ -26,7 +27,7 @@ function useMapData(filters) {
   return state;
 }
 
-export function MapView({ filters, onSelect }) {
+export function MapView({ filters, onSelect, onReset }) {
   const data = useMapData(filters);
   const svgRef = useRef(null);
   const drag = useRef(null);
@@ -152,14 +153,15 @@ export function MapView({ filters, onSelect }) {
           })}
         </svg>
         <div className="map-controls" role="group" aria-label="Kartensteuerung">
-          <button type="button" className="secondary" aria-label="Hineinzoomen" onClick={() => setView(zoomView(view, 0.6))}>+</button>
-          <button type="button" className="secondary" aria-label="Herauszoomen" onClick={() => setView(zoomView(view, 1.6))}>−</button>
-          <button type="button" className="secondary" aria-label="Gesamte Stadt zeigen" disabled={!zoomed} onClick={() => setView(FULL_VIEW)}>Alles</button>
+          <button type="button" className="btn btn-secondary btn-icon" aria-label="Hineinzoomen" onClick={() => setView(zoomView(view, 0.6))}><Icon name="Plus" /></button>
+          <button type="button" className="btn btn-secondary btn-icon" aria-label="Herauszoomen" onClick={() => setView(zoomView(view, 1.6))}><Icon name="Minus" /></button>
+          <button type="button" className="btn btn-secondary btn-icon" aria-label="Gesamte Stadt zeigen" disabled={!zoomed} onClick={() => setView(FULL_VIEW)}><Icon name="Maximize" /></button>
         </div>
-        {data.status === 'loading' && <p className="map-overlay" role="status">Lade Karte …</p>}
+        {data.status === 'loading' && <p className="map-overlay text-meta" role="status">Lade Karte …</p>}
       </div>
 
-      <p className="map-status" role="status">
+      <div className="map-status text-description" role="status">
+        {data.status === 'loading' && <span className="skeleton skeleton-w-40" aria-hidden="true" />}
         {data.status === 'error' && 'Die Karte konnte nicht geladen werden.'}
         {data.status === 'ready' && (
           <>
@@ -168,29 +170,43 @@ export function MapView({ filters, onSelect }) {
             {data.truncated && ' Es werden nur die ersten Treffer gezeigt, bitte Zeitraum eingrenzen.'}
           </>
         )}
-      </p>
+      </div>
 
-      <div className="map-panel" aria-live="polite">
+      {data.status === 'ready' && data.located === 0 && (
+        <div className="empty">
+          <Icon name="MapPin" size={24} />
+          <h2>Keine Orte auf der Karte</h2>
+          <p>Für diese Filter gibt es keine Einträge mit bekannter Position.</p>
+          {onReset && (
+            <button type="button" className="btn btn-secondary" onClick={onReset}>
+              <Icon name="RotateCcw" />
+              Zurücksetzen
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="card card-compact" aria-live="polite">
         {selection ? (
           <>
-            <h2 className="map-panel-title">{selection.length === 1 ? 'Ausgewählte Versammlung' : `${selection.length} Versammlungen an dieser Stelle`}</h2>
+            <h2 className="card-title">{selection.length === 1 ? 'Ausgewählte Versammlung' : `${selection.length} Versammlungen an dieser Stelle`}</h2>
             <ul className="map-panel-list">
               {selection.slice(0, PANEL_LIMIT).map((item) => (
                 <li key={item.id}>
-                  <p className="row-time">{formatDay(item.datum)}, {formatTime(item.von) || 'Zeit offen'}</p>
-                  <a href={`/versammlung/${item.id}`} onClick={(event) => { event.preventDefault(); onSelect(item.id); }}>{item.thema || 'Ohne Thema'}</a>
-                  <p className="row-place">{[item.plz, item.strasseNr].filter(Boolean).join(' · ')}</p>
+                  <p className="text-meta">{formatDay(item.datum)}, {formatTime(item.von) || 'Zeit offen'}</p>
+                  <a className="text-strong" href={`/versammlung/${item.id}`} onClick={(event) => { event.preventDefault(); onSelect(item.id); }}>{item.thema || 'Ohne Thema'}</a>
+                  <p className="text-description">{[item.plz, item.strasseNr].filter(Boolean).join(' · ')}</p>
                 </li>
               ))}
             </ul>
-            {selection.length > PANEL_LIMIT && <p>und {selection.length - PANEL_LIMIT} weitere. In der Listenansicht stehen alle Einträge.</p>}
+            {selection.length > PANEL_LIMIT && <p className="text-description">und {selection.length - PANEL_LIMIT} weitere. In der Listenansicht stehen alle Einträge.</p>}
           </>
         ) : (
-          <p>Markierung antippen oder anklicken, um Einzelheiten zu sehen. Zahlen zeigen mehrere Versammlungen, ein Klick vergrößert den Ausschnitt.</p>
+          <p className="text-description">Markierung antippen oder anklicken, um Einzelheiten zu sehen. Zahlen zeigen mehrere Versammlungen, ein Klick vergrößert den Ausschnitt.</p>
         )}
       </div>
 
-      <p className="map-credit">
+      <p className="map-credit text-meta">
         Bezirksgrenzen: Geoportal Berlin / ALKIS Berlin Bezirke (dl-zero-de/2.0). Positionen aus den Adressen mit Nominatim ermittelt, © OpenStreetMap-Mitwirkende (ODbL).
         Die Karte lädt keine Kacheln von Dritten.
       </p>

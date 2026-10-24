@@ -51,7 +51,21 @@ test('privacy page states the facts and has a valid document skeleton', () => {
   assert.match(html, /Speicherdauer/);
   assert.match(html, /Profilbildung/);
   assert.match(html, /keine Kartenkacheln/);
-  assert.equal((html.match(/<h1>/g) ?? []).length, 1);
+  assert.equal((html.match(/<h1[ >]/g) ?? []).length, 1);
+});
+
+test('legal pages use the same shell as the app: sidebar, header, active item, drawer script', () => {
+  const html = renderLegalPage('impressum', { env: complete, stylesheet });
+  assert.match(html, /<aside id="sidebar" class="sidebar"/);
+  assert.match(html, /<header class="app-header">/);
+  assert.match(html, /<p class="header-title">Impressum<\/p>/);
+  assert.match(html, /<a class="nav-item" href="\/impressum"[^>]*aria-current="page"/);
+  assert.equal((html.match(/aria-current="page"/g) ?? []).length, 1);
+  for (const label of ['Liste', 'Karte', 'Feed (Atom)', 'Impressum', 'Datenschutz', 'Datenquelle: Polizei Berlin']) assert.ok(html.includes(`<span class="nav-label">${label}</span>`), label);
+  assert.match(html, /<script type="module" src="\/nav\.js"><\/script>/);
+  assert.match(html, /<svg class="icon"/);
+  assert.match(html, /aria-label="Menü öffnen"/);
+  assert.doesNotMatch(html, /<script>|onclick=|style="/); // content security policy: no inline code or styles
 });
 
 test('unknown page kinds are rejected', () => {

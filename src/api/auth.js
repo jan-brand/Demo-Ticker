@@ -5,6 +5,8 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
 
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32 };
 const LEGAL_PATHS = /^\/(impressum|datenschutz)\/?$/;
+// Style sheet, fonts and the drawer script are needed by the public legal pages and contain nothing confidential.
+const PRESENTATION_FILES = /^(\/nav\.js|\/assets\/[\w.-]+\.(css|woff2))$/;
 
 // Format scrypt.N.salt.hash with base64url parts: no '$' in it, because Docker Compose would expand that in .env files.
 export function hashPassword(password) {
@@ -64,7 +66,7 @@ export function credentialsValid(header, config) {
 // The health check must work without credentials, the legal pages by default as well (they have to stay reachable).
 export function isPublicPath(pathname, config) {
   if (!config.enabled) return true;
-  if (pathname === '/healthz') return true;
+  if (pathname === '/healthz' || PRESENTATION_FILES.test(pathname)) return true;
   return !config.protectLegal && LEGAL_PATHS.test(pathname);
 }
 

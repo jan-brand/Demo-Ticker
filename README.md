@@ -90,6 +90,16 @@ Soll der Import unabhängig von einem offenen Terminal laufen, gibt es drei Wege
 - **Docker:** Der Dienst `importer` im Compose-Profil `app` läuft rund um die Uhr (siehe „Betrieb im Internet“).
 - **cron** (Linux/macOS): `0 * * * * cd /pfad/zu/demo-ticker && npm run import`
 
+## Gestaltung
+
+Die Oberfläche folgt dem Designsystem „Modern Vintage Minimalism“ (warme Cremetöne, Braun, gedämpftes Olive, vereinzelt Terrakotta). Alle Werte stehen als Tokens am Anfang von `src/frontend/styles.css` (`--background`, `--surface`, `--primary`, `--space-*`, `--radius-*` …); neue Komponenten werden daraus gebaut, nicht mit neuen Farben.
+
+- **Layout:** feste Sidebar (240 px), Header (64 px) und Inhalt (maximal 1160 px). Ab 768 px ist die Sidebar eine Icon-Leiste (72 px) mit Tooltips, unter 768 px ein Drawer (Fokusfalle, Escape, Klick daneben, Fokus kehrt zum Menü-Button zurück). Die Navigation steht einmal in `src/shared/nav.js` und gilt für die App und die serverseitigen Seiten (Impressum, Datenschutz, 404).
+- **Schrift:** DM Sans, **selbst gehostet** (`src/frontend/fonts/`, Lizenz SIL OFL 1.1 liegt dabei). Ein Einbinden über Google Fonts hätte die IP jedes Besuchers an Google übertragen und der Datenschutzerklärung und der Content-Security-Policy widersprochen.
+- **Icons:** Lucide (`lucide-react` im Browser, `lucide` für die serverseitigen Seiten), Strichstärke 1,75.
+- **Dark Mode:** Er bestand schon vorher (automatisch nach Systemeinstellung) und bleibt unverändert in seiner Funktion. Er mappt nur die Tokens neu; die neue Gestaltung ist für die helle Darstellung spezifiziert.
+- **Barrierefreiheit:** sichtbare Fokusringe, Skip-Link, Beschriftungen, Drawer als Dialog, Skeleton-Ladezustände, `prefers-reduced-motion`. Die Kontraste aller Text- und Farbpaare sind nachgerechnet (WCAG AA).
+
 ## Karte und Ortsbestimmung
 
 Die Ansicht „Karte“ zeigt die Versammlungen des aktuellen Filters auf einer Berlin-Karte (Markierungen, Cluster mit Anzahl, Zoom per Buttons, Mausrad und Ziehen, Tastaturbedienung). Die Karte ist selbst als SVG gezeichnet: Die Bezirksgrenzen liegen als kleine Datei im Frontend (`src/frontend/berlin-map.js`, 17 KB), es werden **keine Kartenkacheln und keine Dienste Dritter** aus dem Browser geladen. Die Listenansicht bleibt die vollständige Alternative.
@@ -284,6 +294,8 @@ Die Unit-Tests (Normalisierung, Plausibilitätsprüfung, Suchabfrage, Zeitraum-S
 - `src/jobs/scheduler.js` – zeitgesteuerter Lauf von `update` (`npm run import:schedule`)
 - `src/geo/geocode.js` – Geocoding mit Nominatim
 - `src/frontend/MapView.jsx`, `mapgeo.js`, `berlin-map.js` – Kartenansicht (SVG) und Rechenkern
+- `src/frontend/Shell.jsx`, `Icon.jsx`, `history.js` – Rahmen mit Sidebar und Drawer, Icons, lesbare Änderungshistorie
+- `src/shared/nav.js`, `src/legal/nav.js`, `src/legal/icons.js` – gemeinsame Navigation, Drawer-Skript und Icons für die serverseitigen Seiten
 - `scripts/build-berlin-map.mjs` – erzeugt die vereinfachten Bezirksgrenzen
 - `src/import/guard.js` – Plausibilitätsprüfung der Quellantwort
 - `src/api/server.js` – REST-API, Routing und Auslieferung des Produktionsbuilds

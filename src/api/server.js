@@ -160,6 +160,7 @@ async function route(request, response) {
 
   if (!isRead) return sendHtml(request, response, 405, renderNotFound({ stylesheet: stylesheetHref() }));
   if (url.pathname === '/feed.xml') return handleFeed(request, response);
+  if (url.pathname === '/nav.js') return sendFile(request, response, resolve(root, 'src/legal/nav.js')).then(() => undefined);
   const legal = url.pathname.match(/^\/(impressum|datenschutz)\/?$/);
   if (legal) return sendHtml(request, response, 200, renderLegalPage(legal[1], { stylesheet: stylesheetHref() }));
   if (await handleStatic(request, response, url.pathname)) return undefined;
