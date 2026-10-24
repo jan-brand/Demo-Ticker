@@ -21,7 +21,7 @@ const auth = authConfig();
 const limiter = new FailureLimiter({ maxFailures: auth.maxFailures, lockMinutes: auth.lockMinutes });
 
 // User accounts with a login form replace the single shared password when USERS_ENABLED is set.
-const users = createUsers({ pool, stylesheet: () => stylesheetHref() });
+const users = createUsers({ pool, stylesheet: (request) => stylesheetHref(request) });
 
 async function handleAssemblyList(request, response, url) {
   const search = buildAssemblySearch(Object.fromEntries(url.searchParams));
@@ -95,7 +95,9 @@ async function handleFeed(request, response) {
 }
 
 // Server-rendered pages reuse the built stylesheet; during development Vite serves the source file.
-function stylesheetHref() {
+function stylesheetHref(request) {
+  // Behind the Vite dev server (see vite.config.js) the source file is served, otherwise the built one.
+  if (request?.headers['x-dev-server']) return '/src/frontend/styles.css';
   try {
     const html = readFileSync(join(frontendRoot, 'index.html'), 'utf8');
     return html.match(/href="(\/assets\/[^"]+\.css)"/)?.[1] ?? '/src/frontend/styles.css';
@@ -169,13 +171,13 @@ async function route(request, response) {
     return sendJson(request, response, 404, { error: 'Not found' });
   }
 
-  if (!isRead) return sendHtml(request, response, 405, renderNotFound({ stylesheet: stylesheetHref(), user }));
+  if (!isRead) return sendHtml(request, response, 405, renderNotFound({ stylesheet: stylesheetHref(request), user }));
   if (url.pathname === '/feed.xml') return handleFeed(request, response);
   if (url.pathname === '/nav.js') return sendFile(request, response, resolve(root, 'src/legal/nav.js')).then(() => undefined);
   const legal = url.pathname.match(/^\/(impressum|datenschutz)\/?$/);
-  if (legal) return sendHtml(request, response, 200, renderLegalPage(legal[1], { stylesheet: stylesheetHref(), user }));
+  if (legal) return sendHtml(request, response, 200, renderLegalPage(legal[1], { stylesheet: stylesheetHref(request), user }));
   if (await handleStatic(request, response, url.pathname)) return undefined;
-  return sendHtml(request, response, 404, renderNotFound({ stylesheet: stylesheetHref(), user }));
+  return sendHtml(request, response, 404, renderNotFound({ stylesheet: stylesheetHref(request), user }));
 }
 
 const handler = async (request, response) => {

@@ -104,7 +104,7 @@ export function createUsers({ pool, env = process.env, stylesheet }) {
     return json(request, response, STATUS[error.code] ?? 400, { error: error.message, code: error.code });
   };
 
-  const css = () => stylesheet();
+  const css = (request) => stylesheet(request);
 
   async function loginAttempt(request, username, password) {
     const ipKey = `ip:${clientKey(request, env)}`;
@@ -170,7 +170,7 @@ export function createUsers({ pool, env = process.env, stylesheet }) {
 
   async function handleAccountPage(request, response, url, user, session) {
     if (request.method === 'GET' || request.method === 'HEAD') {
-      return html(request, response, 200, renderAccountPage({ stylesheet: css(), user, ok: url.searchParams.get('ok') === '1', forced: user.mustChangePassword }));
+      return html(request, response, 200, renderAccountPage({ stylesheet: css(request), user, ok: url.searchParams.get('ok') === '1', forced: user.mustChangePassword }));
     }
     const form = await readForm(request);
     const errors = {};
@@ -184,14 +184,14 @@ export function createUsers({ pool, env = process.env, stylesheet }) {
         if (error.code === 'bad_credentials') errors.current = error.message; else errors.next = error.message;
       }
     }
-    return html(request, response, 400, renderAccountPage({ stylesheet: css(), user, errors, forced: user.mustChangePassword }));
+    return html(request, response, 400, renderAccountPage({ stylesheet: css(request), user, errors, forced: user.mustChangePassword }));
   }
 
   async function handleLogin(request, response, url, user) {
     const isApi = url.pathname === '/api/session';
     if (request.method === 'GET' || request.method === 'HEAD') {
       if (user) return redirect(request, response, '/');
-      return html(request, response, 200, renderLoginPage({ stylesheet: css(), next: safeNext(url.searchParams.get('weiter')) }));
+      return html(request, response, 200, renderLoginPage({ stylesheet: css(request), next: safeNext(url.searchParams.get('weiter')) }));
     }
     const body = isApi ? await readJson(request) : await readForm(request);
     const username = body.username ?? body.benutzername ?? '';
@@ -209,7 +209,7 @@ export function createUsers({ pool, env = process.env, stylesheet }) {
       if (!(error instanceof UserError)) throw error;
       const status = error.code === 'rate_limited' ? 429 : 401;
       if (isApi) return json(request, response, status, { error: error.message, code: error.code });
-      return html(request, response, status, renderLoginPage({ stylesheet: css(), error: error.message, username: String(username).slice(0, 64), next }));
+      return html(request, response, status, renderLoginPage({ stylesheet: css(request), error: error.message, username: String(username).slice(0, 64), next }));
     }
   }
 
@@ -251,7 +251,7 @@ export function createUsers({ pool, env = process.env, stylesheet }) {
 
     if (pathname === '/konto' || pathname === '/konto/passwort') return handleAccountPage(request, response, url, user, session);
     if (isApi && (pathname === '/api/session' || pathname.startsWith('/api/users') || pathname === '/api/audit')) return handleApi(request, response, url, user, session);
-    if (pathname === '/nutzer' && user.role !== 'admin') return html(request, response, 403, renderForbiddenPage({ stylesheet: css(), user }));
+    if (pathname === '/nutzer' && user.role !== 'admin') return html(request, response, 403, renderForbiddenPage({ stylesheet: css(request), user }));
     return { user };
   }
 

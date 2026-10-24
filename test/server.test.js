@@ -75,6 +75,14 @@ test('server: headers, legal pages, routing and path safety', { skip: !hasBuild 
     }
   });
 
+  await t.test('server-rendered pages link the built style sheet, or the source file behind the Vite dev server', async () => {
+    const built = await (await get('/impressum')).text();
+    assert.match(built, /href="\/assets\/[^"]+\.css"/);
+    const dev = await (await get('/impressum', { 'x-dev-server': '1' })).text();
+    assert.match(dev, /href="\/src\/frontend\/styles\.css"/);
+    assert.doesNotMatch(dev, /\/assets\/[^"]+\.css/);
+  });
+
   await t.test('unknown paths, wrong methods and path traversal are rejected', async () => {
     assert.equal((await get('/gibt-es-nicht')).status, 404);
     assert.equal((await get('/api/gibt-es-nicht')).status, 404);

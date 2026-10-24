@@ -208,7 +208,7 @@ npm start
 - `GET /api/import/status` – Ergebnis des letzten Importlaufs und Zeitpunkt des letzten Erfolgs
 - `GET /feed.xml` – Atom-Feed für heute und die nächsten 14 Tage (absolute Links aus `PUBLIC_URL`, sonst aus dem Host-Header)
 
-Während der Entwicklung startet `npm run dev` beides zusammen: die API auf Port 3000 und Vite unter `http://localhost:5173`, das `/api` an den Node-Server weiterreicht. Die Seite erreichst du unter `http://localhost:5173`. Voraussetzung ist eine gefüllte Datenbank (`npm run import`) und ein laufender Datenbank-Container. Mit `Strg+C` werden beide Prozesse beendet. Nur das Frontend startet `npm run dev:web`; ohne API bleibt die Seite leer.
+Während der Entwicklung startet `npm run dev` beides zusammen: die API auf Port 3000 und Vite unter `http://localhost:5173`, das `/api` an den Node-Server weiterreicht. Die Seite erreichst du unter `http://localhost:5173`. Die serverseitig erzeugten Seiten (Anmelden, Konto, Impressum, Datenschutz) bekommen dort ihr Stylesheet von Vite. Öffnest du sie direkt auf Port 3000, braucht der Server den Build (`npm run build`), sonst fehlt das CSS. Voraussetzung ist eine gefüllte Datenbank (`npm run import`) und ein laufender Datenbank-Container. Mit `Strg+C` werden beide Prozesse beendet. Nur das Frontend startet `npm run dev:web`; ohne API bleibt die Seite leer.
 
 ## Betrieb im Internet
 
