@@ -111,7 +111,8 @@ npm run update      # Import und anschließend Ortsbestimmung für neue Einträg
 npm run geocode     # nur Ortsbestimmung, alle offenen Einträge (beim ersten Mal rund 30 Minuten)
 ```
 
-- Ergebnisse außerhalb von Berlin werden verworfen (gleichnamige Straßen in anderen Städten). Einträge ohne Straße oder ohne Treffer erscheinen nicht auf der Karte; die Seite nennt, wie viele es sind. Nicht gefundene Einträge werden nach `GEOCODER_RETRY_DAYS` (7) erneut versucht.
+- Der Befehl `npm run geocode` meldet `"checked":0`, wenn nichts mehr offen ist; das ist kein Fehler. Fehlgeschlagene Einträge werden erst nach `GEOCODER_RETRY_DAYS` erneut versucht, sofort geht es mit `GEOCODER_RETRY_DAYS=0` (PowerShell: `$env:GEOCODER_RETRY_DAYS='0'; npm run geocode`).
+- Ergebnisse außerhalb von Berlin werden verworfen (gleichnamige Straßen in anderen Städten). Einträge ohne Straße und ohne Strecke oder ohne Treffer erscheinen nicht auf der Karte; die Seite nennt, wie viele es sind. Bahnhöfe („S-Bhf. Zehlendorf“) werden als „Bahnhof …“ gesucht, Zusätze wie „ggü“ abgeschnitten. Bei **Aufzügen ohne Adresse** wird der Startpunkt der Strecke verwendet, die Markierung zeigt dann die Straße ohne Hausnummer. Nicht gefundene Einträge werden nach `GEOCODER_RETRY_DAYS` (7) erneut versucht.
 - Abschalten: `GEOCODING=off` in `.env`. Eigener Geocoder: `GEOCODER_URL`. Kontaktangabe für den User-Agent (die Nominatim-Regeln empfehlen sie): `GEOCODER_CONTACT` in `.env`; sie wird nur gesendet, wenn du sie selbst einträgst.
 - Namensnennung: Die Seite nennt unter der Karte und im Impressum „© OpenStreetMap-Mitwirkende (ODbL)“ sowie die Herkunft der Bezirksgrenzen. Die Bezirksgrenzen stammen aus dem Datensatz „ALKIS Berlin Bezirke“ des Geoportals Berlin, veröffentlicht unter der Datenlizenz Deutschland – Zero – Version 2.0 (keine Namensnennungspflicht, die Angabe erfolgt freiwillig).
 - Die Grenzen lassen sich neu erzeugen: `node scripts/build-berlin-map.mjs [GeoJSON-Datei oder URL]`.

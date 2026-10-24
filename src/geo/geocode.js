@@ -12,13 +12,39 @@ export const insideBerlin = (lat, lon) => Number.isFinite(lat) && Number.isFinit
 export function cleanStreet(value) {
   const first = String(value ?? '').split(/[;\n]|\s+-\s*>|\s{2,}/)[0].split(',')[0].trim();
   const withoutRange = first.replace(/(\d+[a-zA-Z]?)\s*[-–/]\s*\d+[a-zA-Z]?\b/, '$1');
-  return withoutRange.replace(/\s+/g, ' ').slice(0, 100);
+  // "Leipziger Platz 19 ggü" means "opposite no. 19": the address itself is what the geocoder needs.
+  const withoutHint = withoutRange.replace(/\s+(ggü\.?|gegenüber)(\s.*)?$/i, '');
+  return withoutHint.replace(/\s+/g, ' ').slice(0, 100);
+}
+
+// For marches the address field is often empty, but the route starts at a known place:
+// "NEU: Bernauer Str. (AK an der Kapelle) - Brunnenstr. - ..." starts at "Bernauer Str.".
+export function routeStart(route) {
+  // Labels like "NEU:", "(Alt):" or "Treff:" come first, a crossing like "Torstr./Tucholskystr." is placed on its first street.
+  const first = String(route ?? '').replace(/^\s*(?:\((?:neu|alt)\)|neu|alt|treff)\s*:\s*/i, '').split(/\s+[-\u2013]\s+|\s{2,}|;|\n/)[0];
+  const firstStreet = first.replace(/\(.*?\)/g, ' ').split(/\s*\/\s*(?:Ecke\s+)?/i)[0];
+  return cleanStreet(firstStreet);
+}
+
+const expandStreetAbbreviation = (name) => name.replace(/str\.(?=\s|$)/gi, (match) => (match[0] === 'S' ? 'Straße' : 'straße'));
+
+// "S-Bhf. Zehlendorf" and "U-Bhf. Turmstr." are stations, which Nominatim only knows as "Bahnhof <name>".
+export function parseStation(street) {
+  const match = String(street ?? '').match(/^[SU][-\s]?(?:Bhf\.?|Bahnhof)\s+(.+)$/i);
+  return match ? match[1].trim() : null;
 }
 
 export function buildGeocodeRequests(assembly) {
-  const street = cleanStreet(assembly.strasseNr);
+  const street = cleanStreet(assembly.strasseNr) || routeStart(assembly.aufzugsstrecke);
   if (!street) return [];
   const plz = /^\d{5}$/.test(String(assembly.plz ?? '').trim()) ? String(assembly.plz).trim() : null;
+  const station = parseStation(street);
+  if (station) {
+    // The station name first, then the street of the same name (U-Bahn stations mostly carry one).
+    const stationRequests = [{ q: `Bahnhof ${expandStreetAbbreviation(station)}, Berlin` }];
+    if (plz) stationRequests.push({ q: `${expandStreetAbbreviation(station)}, ${plz} Berlin` });
+    return stationRequests;
+  }
   const requests = [];
   if (plz) requests.push({ street, postalcode: plz, city: 'Berlin' });
   requests.push({ q: `${street}, ${[plz, 'Berlin'].filter(Boolean).join(' ')}` });
@@ -63,7 +89,7 @@ export async function geocodePending({ limit = 100, env = process.env } = {}) {
   if (!config.enabled) return { enabled: false, checked: 0, found: 0, notFound: 0, skipped: 0, stopped: false };
 
   const pending = await pool.query(
-    `SELECT id, plz, strasse_nr AS "strasseNr" FROM assemblies
+    `SELECT id, plz, strasse_nr AS "strasseNr", aufzugsstrecke FROM assemblies
       WHERE lat IS NULL AND (geocode_status IS NULL
          OR (geocode_status = 'not_found' AND geocoded_at < NOW() - make_interval(days => $2)))
       ORDER BY datum, id LIMIT $1`,
