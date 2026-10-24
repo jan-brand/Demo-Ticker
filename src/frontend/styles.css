@@ -143,6 +143,7 @@
     --focus-ring: rgba(108, 199, 186, 0.55);
     --focus-field: rgba(108, 199, 186, 0.30);
     --scrollbar-thumb: #2b4650;
+    --accent-sage-light: #2b4650;
     --skeleton-base: #17303a;
     --skeleton-highlight: #20373f;
   }
@@ -548,3 +549,21 @@ button.nav-item { width: 100%; font: inherit; font-weight: 500; cursor: pointer;
 .toast-description { font-size: 0.8125rem; line-height: 1.25rem; color: var(--text-secondary); overflow-wrap: anywhere; }
 .toast-close { width: 32px; height: 32px; margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0 0; }
 @media (max-width: 767px) { .toast-region { top: var(--space-4); right: var(--space-4); } }
+
+/* ---------- Location maps: thumbnail in the list, larger map on the detail page ---------- */
+.map-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+.location-map { display: block; width: 100%; height: auto; }
+.location-map .map-district { fill: var(--surface); stroke: var(--border-hover); }
+.location-map .map-district.is-active { fill: var(--accent-sage-light); stroke: var(--text-secondary); }
+.location-map-small .map-district { stroke-width: 9; }
+.location-map-large .map-district { stroke-width: 2; }
+.location-dot { fill: var(--accent-terracotta); stroke: var(--text-secondary); }
+.row-map { width: 88px; align-self: start; background: var(--surface-secondary); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+@media (min-width: 768px) { .row.has-map { grid-template-columns: 7rem 1fr 88px; } }
+@media (max-width: 767px) {
+  .row.has-map .row-body { padding-right: 80px; }
+  .row-map { position: absolute; top: var(--space-4); right: var(--space-4); width: 64px; }
+}
+.location-block { display: grid; gap: var(--space-4); justify-items: start; }
+.location-block p { margin: 0; }
+.location-frame { width: 100%; max-width: 560px; }

@@ -165,6 +165,8 @@ async function route(request, response) {
     if (!isRead) return sendJson(request, response, 405, { error: 'Method not allowed' });
     if (url.pathname === '/api/assemblies') return handleAssemblyList(request, response, url);
     if (url.pathname === '/api/map') return handleMap(request, response, url);
+    // Without user accounts nobody is signed in; answering 200 keeps the browser console free of a failed request.
+    if (url.pathname === '/api/session' && !users.enabled) return sendJson(request, response, 200, { user: null, accounts: false });
     if (url.pathname === '/api/import/status') return handleImportStatus(request, response);
     const detail = url.pathname.match(/^\/api\/assemblies\/(\d+)$/);
     if (detail) return handleAssemblyDetail(request, response, detail[1]);

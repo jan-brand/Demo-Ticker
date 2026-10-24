@@ -56,3 +56,36 @@ export function toPoint([id, lat, lon, datum, von, thema, plz, strasseNr]) {
   const [x, y] = project(lat, lon);
   return { id, lat, lon, x, y, datum, von, thema, plz, strasseNr };
 }
+
+// ---------- Which district contains a point? Uses the same outlines that are drawn on the map. ----------
+let districtRings = null;
+
+// The outlines are stored as SVG path data ("M x y L x y ... Z M ..."), parsed once into coordinate lists.
+function parsedDistricts() {
+  districtRings ??= berlin.districts.map((district) => ({
+    name: district.name,
+    rings: district.d.split('M').filter(Boolean).map((ring) => ring.replace('Z', '').split('L').map((pair) => pair.trim().split(' ').map(Number))),
+  }));
+  return districtRings;
+}
+
+function inRing(x, y, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// Returns { index, name } of the district that contains the position, or null (outside of Berlin or on a border gap).
+export function districtAt(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const [x, y] = project(lat, lon);
+  const found = parsedDistricts().findIndex((district) => district.rings.some((ring) => inRing(x, y, ring)));
+  return found < 0 ? null : { index: found, name: parsedDistricts()[found].name };
+}
+
+// OpenStreetMap link for the street-level view. It is only opened when the user clicks it.
+export const osmUrl = (lat, lon) => `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=17/${lat}/${lon}`;

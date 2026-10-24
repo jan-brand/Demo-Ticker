@@ -5,7 +5,9 @@ import { SOURCE_URL } from '../shared/nav.js';
 import { formatDate, formatDay, formatTimeRange } from './format.js';
 import { describeChange } from './history.js';
 import { Icon } from './Icon.jsx';
+import { LocationMap, MapDefs } from './LocationMap.jsx';
 import { MapView } from './MapView.jsx';
+import { districtAt, osmUrl } from './mapgeo.js';
 import { isoDate, quickRanges } from './ranges.js';
 import { AppShell } from './Shell.jsx';
 import { ToastProvider } from './ui.jsx';
@@ -98,11 +100,14 @@ function FilterCard({ filters, loading, onChange, onSubmit, onRange, onReset }) 
   );
 }
 
+const hasPosition = (assembly) => assembly.lat !== null && assembly.lat !== undefined && assembly.lon !== null && assembly.lon !== undefined;
+
 function AssemblyRow({ assembly, href, onSelect }) {
   const place = [assembly.plz, assembly.strasseNr, assembly.aufzugsstrecke].filter(Boolean).join(' · ');
+  const located = hasPosition(assembly);
   return (
     <li>
-      <article className="row">
+      <article className={`row ${located ? 'has-map' : ''}`}>
         <p className="row-time tabular">{formatTimeRange(assembly)}</p>
         <div className="row-body">
           <h3 className="card-title">
@@ -116,6 +121,7 @@ function AssemblyRow({ assembly, href, onSelect }) {
             </div>
           )}
         </div>
+        {located && <div className="row-map"><LocationMap lat={Number(assembly.lat)} lon={Number(assembly.lon)} size="small" /></div>}
       </article>
     </li>
   );
@@ -160,6 +166,35 @@ function EmptyState({ onReset }) {
   );
 }
 
+function LocationCard({ assembly }) {
+  if (!hasPosition(assembly)) {
+    return (
+      <section className="card">
+        <h2 className="card-title">Lage</h2>
+        <p className="text-description">Für diesen Eintrag ist kein Ort bekannt, er erscheint deshalb nicht auf der Karte.</p>
+      </section>
+    );
+  }
+  const lat = Number(assembly.lat);
+  const lon = Number(assembly.lon);
+  const district = districtAt(lat, lon);
+  // Marches without an address are placed at the start of their route (see the geocoding in the README).
+  const fromRoute = !assembly.strasseNr && assembly.aufzugsstrecke;
+  return (
+    <section className="card">
+      <h2 className="card-title">Lage</h2>
+      <div className="location-block">
+        <div className="map-frame location-frame"><LocationMap lat={lat} lon={lon} size="large" /></div>
+        <p className="text-description">
+          {district ? `Bezirk ${district.name}. ` : ''}
+          {fromRoute ? 'Die Markierung zeigt den Start der Strecke, die Hausnummer ist nicht bekannt.' : 'Die Position wurde aus der Adresse ermittelt.'}
+        </p>
+        <p><a className="btn btn-secondary" href={osmUrl(lat, lon)} rel="noopener noreferrer"><Icon name="ExternalLink" />In OpenStreetMap ansehen</a></p>
+      </div>
+    </section>
+  );
+}
+
 function Detail({ assembly, onBack }) {
   const heading = useRef(null);
   useEffect(() => {
@@ -193,6 +228,7 @@ function Detail({ assembly, onBack }) {
             <dt>Aufzugsstrecke</dt><dd>{assembly.aufzugsstrecke || '—'}</dd>
           </dl>
         </div>
+        <LocationCard assembly={assembly} />
         <p><a className="btn btn-secondary" href={SOURCE_URL} rel="noopener"><Icon name="ExternalLink" />Offizielle Quelle bei der Polizei Berlin</a></p>
         <section className="card">
           <h2 className="card-title">Änderungshistorie</h2>
@@ -390,4 +426,4 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')).render(<ToastProvider><App /></ToastProvider>);
+createRoot(document.getElementById('root')).render(<ToastProvider><MapDefs /><App /></ToastProvider>);

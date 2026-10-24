@@ -48,6 +48,12 @@ test('server: headers, legal pages, routing and path safety', { skip: !hasBuild 
     assert.match(html, /<meta name="description"/);
   });
 
+  await t.test('without user accounts the session endpoint answers "nobody signed in" instead of an error', async () => {
+    const response = await get('/api/session');
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { user: null, accounts: false });
+  });
+
   await t.test('detail address is served by the app shell', async () => {
     assert.equal((await get('/versammlung/42')).status, 200);
   });

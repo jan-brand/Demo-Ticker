@@ -63,3 +63,21 @@ test('API tuples become points with projected coordinates', () => {
   assert.equal(point.thema, 'Demo');
   assert.ok(point.x > 0 && point.y > 0);
 });
+
+test('a position is assigned to the right district', async () => {
+  const { districtAt } = await import('../src/frontend/mapgeo.js');
+  assert.equal(districtAt(52.5186, 13.3761)?.name, 'Mitte'); // Reichstag
+  assert.equal(districtAt(52.5219, 13.4132)?.name, 'Mitte'); // Alexanderplatz
+  assert.equal(districtAt(52.5350, 13.2000)?.name, 'Spandau');
+  assert.equal(districtAt(52.4420, 13.5800)?.name, 'Treptow-Köpenick');
+  assert.equal(districtAt(52.4888, 13.3946)?.name, 'Friedrichshain-Kreuzberg'); // Bergmannstr.
+  assert.equal(districtAt(52.5927, 13.2996)?.name, 'Reinickendorf');
+  assert.equal(districtAt(48.1351, 11.5820), null); // Munich
+  assert.equal(districtAt(NaN, 13.4), null);
+  assert.equal(districtAt(52.5, 13.4)?.index >= 0, true);
+});
+
+test('the OpenStreetMap link carries the position', async () => {
+  const { osmUrl } = await import('../src/frontend/mapgeo.js');
+  assert.equal(osmUrl(52.5186, 13.3761), 'https://www.openstreetmap.org/?mlat=52.5186&mlon=13.3761#map=17/52.5186/13.3761');
+});

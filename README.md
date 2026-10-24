@@ -104,6 +104,8 @@ Die Oberfläche folgt dem Designsystem „Modern Vintage Minimalism“ (warme Cr
 
 Die Ansicht „Karte“ zeigt die Versammlungen des aktuellen Filters auf einer Berlin-Karte (Markierungen, Cluster mit Anzahl, Zoom per Buttons, Mausrad und Ziehen, Tastaturbedienung). Die Karte ist selbst als SVG gezeichnet: Die Bezirksgrenzen liegen als kleine Datei im Frontend (`src/frontend/berlin-map.js`, 17 KB), es werden **keine Kartenkacheln und keine Dienste Dritter** aus dem Browser geladen. Die Listenansicht bleibt die vollständige Alternative.
 
+Jeder Eintrag zeigt außerdem, wo er liegt: In der Liste als kleine Berlin-Karte mit hervorgehobenem Bezirk und Markierung (Einträge ohne bekannten Ort haben keine), auf der Detailseite als größere Karte „Lage“ mit dem Bezirksnamen. Für die Straßenansicht gibt es dort einen Link zu OpenStreetMap, der erst nach einem Klick geöffnet wird. Den Bezirk bestimmt die Anwendung selbst aus den vorhandenen Grenzen (`districtAt` in `src/frontend/mapgeo.js`).
+
 Die Quelle liefert keine Koordinaten. Der **Server** ermittelt sie aus Straße, Hausnummer und PLZ über den Geocoder Nominatim (OpenStreetMap). Übermittelt werden nur die öffentlich bekannten Adressen, keine Daten von Besucherinnen und Besuchern. Das passiert automatisch nach jedem Import für neue Einträge (höchstens `GEOCODE_BATCH`, Standard 100, pro Lauf; eine Anfrage pro Sekunde, wie es die Nutzungsregeln verlangen). Das Ergebnis wird gespeichert, jede Adresse wird also nur einmal angefragt.
 
 ```powershell
@@ -320,7 +322,7 @@ Der Integrationstest `test/users.integration.test.js` startet einen echten Serve
 - `src/jobs/update.js` – Import plus Ortsbestimmung (`npm run update`), `src/jobs/geocode.js` nur Ortsbestimmung
 - `src/jobs/scheduler.js` – zeitgesteuerter Lauf von `update` (`npm run import:schedule`)
 - `src/geo/geocode.js` – Geocoding mit Nominatim
-- `src/frontend/MapView.jsx`, `mapgeo.js`, `berlin-map.js` – Kartenansicht (SVG) und Rechenkern
+- `src/frontend/MapView.jsx`, `LocationMap.jsx`, `mapgeo.js`, `berlin-map.js` – Kartenansicht (SVG), kleine Lagekarten je Eintrag und Rechenkern (Projektion, Cluster, Bezirkszuordnung)
 - `src/frontend/Shell.jsx`, `Icon.jsx`, `history.js` – Rahmen mit Sidebar und Drawer, Icons, lesbare Änderungshistorie
 - `src/shared/nav.js`, `src/legal/nav.js`, `src/legal/icons.js` – gemeinsame Navigation, Drawer-Skript und Icons für die serverseitigen Seiten
 - `scripts/build-berlin-map.mjs` – erzeugt die vereinfachten Bezirksgrenzen
