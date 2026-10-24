@@ -1,6 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import { isoDate, quickRanges } from './ranges.js';
+
+const SOURCE_URL = 'https://www.berlin.de/polizei/service/versammlungsbehoerde/versammlungen-aufzuege/';
+const LIST_TITLE = 'Berliner Versammlungen heute und demnächst – Demo-Ticker';
 
 function formatDate(value) {
   return value ? new Intl.DateTimeFormat('de-DE').format(new Date(`${value}T00:00:00`)) : 'Unbekanntes Datum';
@@ -10,12 +14,57 @@ function formatTime(value) {
   return value ? String(value).slice(0, 5) : '';
 }
 
-function SearchForm({ filters, onChange, onSubmit }) {
+function formatDay(value) {
+  return new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatTimeRange(assembly) {
+  const from = formatTime(assembly.von);
+  const to = formatTime(assembly.bis);
+  return from && to ? `${from}–${to}` : from || 'Zeit offen';
+}
+
+// The API returns assemblies sorted by date, so consecutive entries with the same date form one day.
+function groupByDay(assemblies) {
+  const days = [];
+  for (const assembly of assemblies) {
+    const last = days[days.length - 1];
+    if (last?.datum === assembly.datum) last.items.push(assembly);
+    else days.push({ datum: assembly.datum, items: [assembly] });
+  }
+  return days;
+}
+
+const defaultFilters = () => ({ q: '', dateFrom: isoDate(new Date()), dateTo: '', plz: '', street: '' });
+const assemblyIdFromPath = () => window.location.pathname.match(/^\/versammlung\/(\d+)$/)?.[1] ?? null;
+
+function activeRange(filters) {
+  return quickRanges().find((range) => range.dateFrom === filters.dateFrom && range.dateTo === filters.dateTo)?.id;
+}
+
+function ImportStatus({ status }) {
+  if (!status?.lastSuccessAt) return <p className="import-status">Noch kein erfolgreicher Datenimport.</p>;
+  const failed = status.latest?.status === 'failed';
   return (
-    <form className="search-form" onSubmit={onSubmit}>
-      <label>
+    <p className="import-status">
+      Stand der Daten: {new Date(status.lastSuccessAt).toLocaleString('de-DE')}
+      {failed && <span className="import-failed"> · letzter Abruf fehlgeschlagen</span>}
+    </p>
+  );
+}
+
+function SearchForm({ filters, onChange, onSubmit, onRange, onReset }) {
+  const current = activeRange(filters);
+  return (
+    <form className="search-form" onSubmit={onSubmit} role="search">
+      <div className="quick-ranges" role="group" aria-label="Zeitraum">
+        {quickRanges().map((range) => (
+          <button key={range.id} type="button" aria-pressed={current === range.id} className={current === range.id ? 'active' : ''} onClick={() => onRange(range)}>{range.label}</button>
+        ))}
+      </div>
+      <label className="field-wide">
         Suchbegriff
-        <input value={filters.q} onChange={(event) => onChange('q', event.target.value)} placeholder="Thema oder Straße" />
+        <input type="search" value={filters.q} onChange={(event) => onChange('q', event.target.value)} placeholder="Thema oder Straße" />
       </label>
       <label>
         Von
@@ -27,61 +76,105 @@ function SearchForm({ filters, onChange, onSubmit }) {
       </label>
       <label>
         PLZ
-        <input inputMode="numeric" value={filters.plz} onChange={(event) => onChange('plz', event.target.value)} placeholder="10117" />
+        <input inputMode="numeric" autoComplete="postal-code" value={filters.plz} onChange={(event) => onChange('plz', event.target.value)} placeholder="10117" />
       </label>
       <label>
         Straße
         <input value={filters.street} onChange={(event) => onChange('street', event.target.value)} placeholder="Unter den Linden" />
       </label>
-      <button type="submit">Suchen</button>
+      <div className="form-actions">
+        <button type="submit" className="primary">Suchen</button>
+        <button type="button" className="secondary" onClick={onReset}>Zurücksetzen</button>
+      </div>
     </form>
   );
 }
 
-function AssemblyCard({ assembly, onSelect }) {
+function AssemblyRow({ assembly, href, onSelect }) {
+  const place = [assembly.plz, assembly.strasseNr, assembly.aufzugsstrecke].filter(Boolean).join(' · ');
   return (
-    <button className="assembly-card" onClick={() => onSelect(assembly.id)}>
-      <div className="card-date">{formatDate(assembly.datum)} · {formatTime(assembly.von)}</div>
-      <h2>{assembly.thema || 'Ohne Thema'}</h2>
-      <p>{[assembly.plz, assembly.strasseNr, assembly.aufzugsstrecke].filter(Boolean).join(' · ') || 'Kein Ort angegeben'}</p>
-      {assembly.isRecurring && <span className="tag">Dauerversammlung</span>}
-    </button>
+    <li>
+      <article className="row">
+        <p className="row-time">{formatTimeRange(assembly)}</p>
+        <div className="row-body">
+          <h3>
+            <a className="row-link" href={href} onClick={(event) => { event.preventDefault(); onSelect(assembly.id); }}>{assembly.thema || 'Ohne Thema'}</a>
+          </h3>
+          <p className="row-place">{place || 'Kein Ort angegeben'}</p>
+          {assembly.isRecurring && <span className="tag">Dauerversammlung</span>}
+          {assembly.removedAt && <span className="tag tag-removed">Aus der Quelle entfernt</span>}
+        </div>
+      </article>
+    </li>
   );
 }
 
+function AssemblyList({ assemblies, onSelect }) {
+  return groupByDay(assemblies).map((day) => (
+    <section className="day" key={day.datum}>
+      <h2>{formatDay(day.datum)}</h2>
+      <ul className="rows">{day.items.map((assembly) => <AssemblyRow key={assembly.id} assembly={assembly} href={`/versammlung/${assembly.id}`} onSelect={onSelect} />)}</ul>
+    </section>
+  ));
+}
+
 function Detail({ assembly, onBack }) {
+  const heading = useRef(null);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    heading.current?.focus();
+  }, [assembly.id]);
+
   return (
     <section>
-      <button className="back" onClick={onBack}>← Zurück zur Suche</button>
+      <button type="button" className="secondary back" onClick={onBack}>Zurück zur Suche</button>
       <article className="detail">
-        <div className="card-date">{formatDate(assembly.datum)} · {formatTime(assembly.von)}{assembly.bis ? `–${formatTime(assembly.bis)}` : ''}</div>
-        <h2>{assembly.thema || 'Ohne Thema'}</h2>
+        <p className="detail-date">{formatDay(assembly.datum)}, {formatTimeRange(assembly)}</p>
+        <h2 ref={heading} tabIndex={-1}>{assembly.thema || 'Ohne Thema'}</h2>
         <dl>
           <dt>PLZ</dt><dd>{assembly.plz || '—'}</dd>
           <dt>Ort</dt><dd>{assembly.strasseNr || '—'}</dd>
           <dt>Aufzugsstrecke</dt><dd>{assembly.aufzugsstrecke || '—'}</dd>
         </dl>
+        {assembly.removedAt && <p className="notice">Diese Versammlung wird seit {new Date(assembly.removedAt).toLocaleString('de-DE')} nicht mehr von der Quelle gelistet.</p>}
         {assembly.isRecurring && <p className="notice">Dauerversammlung{assembly.recurringStart ? ` vom ${formatDate(assembly.recurringStart)}` : ''}{assembly.recurringEnd ? ` bis ${formatDate(assembly.recurringEnd)}` : ''}.</p>}
+        <p><a className="button-link" href={SOURCE_URL} rel="noopener">Offizielle Quelle bei der Polizei Berlin</a></p>
         <h3>Änderungshistorie</h3>
-        {assembly.history.length ? <ul className="history">{assembly.history.map((entry) => <li key={entry.id}>{new Date(entry.changedAt).toLocaleString('de-DE')}<pre>{JSON.stringify(entry.diff, null, 2)}</pre></li>)}</ul> : <p>Noch keine Änderungen erkannt.</p>}
+        {assembly.history.length
+          ? <ul className="history">{assembly.history.map((entry) => <li key={entry.id}>{new Date(entry.changedAt).toLocaleString('de-DE')}<pre>{JSON.stringify(entry.diff, null, 2)}</pre></li>)}</ul>
+          : <p>Noch keine Änderungen erkannt.</p>}
       </article>
     </section>
   );
 }
 
+function Footer() {
+  return (
+    <footer className="site-footer">
+      <nav aria-label="Rechtliches und Quelle">
+        <a href="/impressum">Impressum</a>
+        <a href="/datenschutz">Datenschutz</a>
+        <a href="/feed.xml">Feed (Atom)</a>
+        <a href={SOURCE_URL} rel="noopener">Datenquelle: Polizei Berlin</a>
+      </nav>
+    </footer>
+  );
+}
+
 function App() {
-  const [filters, setFilters] = useState({ q: '', dateFrom: '', dateTo: '', plz: '', street: '' });
+  const [filters, setFilters] = useState(defaultFilters);
+  const [importStatus, setImportStatus] = useState(null);
   const [assemblies, setAssemblies] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !assemblyIdFromPath());
   const [error, setError] = useState('');
 
-  const search = async (page = 1) => {
+  const search = async (page = 1, activeFilters = filters, keepError = false) => {
     setLoading(true);
-    setError('');
+    if (!keepError) setError('');
     try {
-      const params = new URLSearchParams({ ...filters, page: String(page) });
+      const params = new URLSearchParams({ ...activeFilters, page: String(page) });
       const response = await fetch(`/api/assemblies?${params}`);
       if (!response.ok) throw new Error('Die Suche konnte nicht geladen werden.');
       const result = await response.json();
@@ -94,23 +187,93 @@ function App() {
     }
   };
 
-  useEffect(() => { search(); }, []);
-
-  const select = async (id) => {
+  const loadDetail = async (id) => {
+    setError('');
     const response = await fetch(`/api/assemblies/${id}`);
-    if (!response.ok) return setError('Der Eintrag konnte nicht geladen werden.');
+    if (!response.ok) {
+      setSelected(null);
+      return setError(response.status === 404 ? 'Diesen Eintrag gibt es nicht.' : 'Der Eintrag konnte nicht geladen werden.');
+    }
     setSelected(await response.json());
   };
 
-  if (selected) return <main><header><h1>Demo-Ticker</h1></header><Detail assembly={selected} onBack={() => setSelected(null)} /></main>;
+  useEffect(() => {
+    const id = assemblyIdFromPath();
+    if (id) loadDetail(id); else search();
+    fetch('/api/import/status').then((response) => (response.ok ? response.json() : null)).then(setImportStatus).catch(() => {});
+
+    // Browser back/forward switches between the list and a detail address.
+    const onPopState = () => {
+      const current = assemblyIdFromPath();
+      if (current) loadDetail(current);
+      else setSelected(null);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  // A detail opened directly by its address has no list yet; load it when the user goes back.
+  useEffect(() => {
+    if (!selected && !pagination && !loading) search(1, filters, true);
+  }, [selected]);
+
+  useEffect(() => {
+    document.title = selected ? `${selected.thema || 'Versammlung'} – Demo-Ticker` : LIST_TITLE;
+  }, [selected]);
+
+  const select = async (id) => {
+    window.history.pushState({ fromList: true }, '', `/versammlung/${id}`);
+    await loadDetail(id);
+  };
+
+  const back = () => {
+    if (window.history.state?.fromList) window.history.back();
+    else {
+      window.history.replaceState(null, '', '/');
+      setSelected(null);
+    }
+  };
+
+  const applyRange = (range) => {
+    const next = { ...filters, dateFrom: range.dateFrom, dateTo: range.dateTo };
+    setFilters(next);
+    search(1, next);
+  };
+
+  const reset = () => {
+    const next = defaultFilters();
+    setFilters(next);
+    search(1, next);
+  };
+
   return (
-    <main>
-      <header><h1>Demo-Ticker</h1><p>Versammlungen und Aufzüge in Berlin</p></header>
-      <SearchForm filters={filters} onChange={(key, value) => setFilters({ ...filters, [key]: value })} onSubmit={(event) => { event.preventDefault(); search(); }} />
-      {error && <p className="error">{error}</p>}
-      {loading ? <p>Lade Einträge …</p> : <><p className="result-count">{pagination?.total ?? 0} Einträge</p><div className="results">{assemblies.map((assembly) => <AssemblyCard key={assembly.id} assembly={assembly} onSelect={select} />)}</div></>}
-      {pagination?.pages > 1 && <nav className="pagination"><button disabled={pagination.page <= 1} onClick={() => search(pagination.page - 1)}>←</button><span>Seite {pagination.page} von {pagination.pages}</span><button disabled={pagination.page >= pagination.pages} onClick={() => search(pagination.page + 1)}>→</button></nav>}
-    </main>
+    <>
+      <a className="skip-link" href="#inhalt">Zum Inhalt springen</a>
+      <header className="masthead">
+        <h1>Demo-Ticker</h1>
+        <p>Versammlungen und Aufzüge in Berlin</p>
+        <ImportStatus status={importStatus} />
+      </header>
+      <main id="inhalt" tabIndex={-1}>
+        {error && <p className="error" role="alert">{error}</p>}
+        {selected ? <Detail assembly={selected} onBack={back} /> : (
+          <>
+            <SearchForm filters={filters} onRange={applyRange} onReset={reset} onChange={(key, value) => setFilters({ ...filters, [key]: value })} onSubmit={(event) => { event.preventDefault(); search(); }} />
+            {loading
+              ? <p role="status">Lade Einträge …</p>
+              : <><p className="result-count" role="status">{pagination?.total ?? 0} Einträge</p><AssemblyList assemblies={assemblies} onSelect={select} /></>}
+            {pagination?.pages > 1 && (
+              <nav className="pagination" aria-label="Seiten">
+                <button type="button" className="secondary" disabled={pagination.page <= 1} onClick={() => search(pagination.page - 1)}>Vorherige Seite</button>
+                <span>Seite {pagination.page} von {pagination.pages}</span>
+                <button type="button" className="secondary" disabled={pagination.page >= pagination.pages} onClick={() => search(pagination.page + 1)}>Nächste Seite</button>
+              </nav>
+            )}
+          </>
+        )}
+      </main>
+      <Footer />
+    </>
   );
 }
 
