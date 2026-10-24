@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { APP_NAME, NAV_MAIN, NAV_SECONDARY } from '../shared/nav.js';
+import { APP_NAME, buildNav } from '../shared/nav.js';
 import { Icon } from './Icon.jsx';
 
 const MOBILE_QUERY = '(max-width: 767px)';
@@ -31,7 +31,8 @@ function NavItem({ item, active, onSelect }) {
 
 // Sidebar on desktop and tablet, drawer on mobile. The drawer traps focus, closes with Escape, the X button or a
 // click on the overlay, and gives the focus back to the menu button.
-export function AppShell({ areaName, activeNav, onSelectNav, children }) {
+export function AppShell({ areaName, activeNav, onSelectNav, user = null, onLogout, children }) {
+  const nav = buildNav(user);
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const menuButton = useRef(null);
@@ -63,6 +64,7 @@ export function AppShell({ areaName, activeNav, onSelectNav, children }) {
   }, [open]);
 
   const select = (id) => { setOpen(false); onSelectNav(id); };
+  const SELECTABLE = ['list', 'map', 'users'];
 
   return (
     <>
@@ -85,12 +87,20 @@ export function AppShell({ areaName, activeNav, onSelectNav, children }) {
         </div>
         <nav aria-label="Bereiche">
           <ul className="nav-list">
-            {NAV_MAIN.map((item) => <li key={item.id}><NavItem item={item} active={activeNav === item.id} onSelect={select} /></li>)}
+            {nav.main.map((item) => <li key={item.id}><NavItem item={item} active={activeNav === item.id} onSelect={SELECTABLE.includes(item.id) ? select : undefined} /></li>)}
           </ul>
         </nav>
         <nav className="nav-secondary" aria-label="Weitere Links">
           <ul className="nav-list">
-            {NAV_SECONDARY.map((item) => <li key={item.id}><NavItem item={item} /></li>)}
+            {nav.secondary.map((item) => <li key={item.id}><NavItem item={item} /></li>)}
+            {nav.logout && (
+              <li>
+                <button type="button" className="nav-item" data-tooltip="Abmelden" onClick={onLogout}>
+                  <Icon name="LogOut" size={18} />
+                  <span className="nav-label">Abmelden</span>
+                </button>
+              </li>
+            )}
           </ul>
         </nav>
       </aside>
@@ -109,6 +119,11 @@ export function AppShell({ areaName, activeNav, onSelectNav, children }) {
             <Icon name="Menu" size={18} />
           </button>
           <p className="header-title">{areaName}</p>
+          {user && (
+            <a className="icon-button header-account" href="/konto" aria-label={`Konto von ${user.username}`}>
+              <Icon name="UserRound" size={18} />
+            </a>
+          )}
         </header>
         <main id="inhalt" className="content" tabIndex={-1}>
           <div className="content-inner">{children}</div>

@@ -241,6 +241,30 @@ Dann verlangt der Server für **alles** ein Passwort: Oberfläche, Dateien, API,
 - **Wichtig:** Basic-Authentifizierung überträgt das Passwort bei jeder Anfrage, **sie gehört nur zusammen mit HTTPS in den Betrieb** (siehe oben). Der Login gilt für den Node-Server (`npm start`, Docker), nicht für den Vite-Entwicklungsserver auf Port 5173.
 - **Feed-Reader und Skripte** melden sich mit `https://benutzer:passwort@host/feed.xml` oder einem Authorization-Header an.
 
+### Nutzerkonten
+
+Für mehrere Personen mit eigenen Zugängen gibt es Nutzerkonten mit Anmeldeformular. Sie lösen den einen gemeinsamen Login oben ab (`AUTH_*` wird dann ignoriert). Einschalten in `.env`:
+
+```text
+USERS_ENABLED=1
+```
+
+Danach ist die **ganze Seite geschlossen**: Wer nicht angemeldet ist, landet auf `/anmelden`. Offen bleiben nur Impressum, Datenschutz, der Healthcheck und Stylesheet und Schrift dafür.
+
+- **Ersten Admin anlegen** (nach `npm run db:migrate`):
+
+  ```powershell
+  npm run user:create -- anna --role admin
+  ```
+
+  Der Befehl zeigt ein Startpasswort **einmalig** an. Mit dem Docker-Betrieb: `docker compose --profile app exec app node scripts/users.mjs create anna --role admin`. Weitere Befehle: `npm run user:list`, `npm run user:reset -- anna` (neues Startpasswort, falls jemand ausgesperrt ist).
+- **Rollen:** *Admin* sieht zusätzlich den Bereich **Nutzer** (Konten anlegen, Rolle ändern, sperren, Startpasswort setzen, löschen, Protokoll). *Mitglied* nutzt Liste, Karte und Feed.
+- **Passwörter:** Startpasswörter vergibt ein Admin (Knopf „Erzeugen“ oder eigener Wert). Das Konto muss es bei der ersten Anmeldung ändern; bis dahin ist nichts anderes erreichbar. Regeln: mindestens 12 Zeichen, nicht den Benutzernamen enthalten, keine trivialen Muster. Gespeichert wird nur ein scrypt-Hash, es gibt keine E-Mail-Adressen und keinen Mailversand.
+- **Sitzungen:** Nach der Anmeldung setzt der Server ein Cookie (`HttpOnly`, `SameSite=Lax`, über HTTPS zusätzlich `Secure` und mit `__Host-`-Präfix). In der Datenbank liegt nur ein Hash der Kennung. Sie gelten `SESSION_HOURS` Stunden (Standard 12) und enden sofort beim Abmelden, Sperren, Löschen oder Zurücksetzen des Passworts. Ändert jemand sein eigenes Passwort, enden seine anderen Sitzungen.
+- **Schutz vor Missbrauch:** Anfragen von fremden Seiten werden abgelehnt (Prüfung von `Origin` und `Sec-Fetch-Site`). Nach 5 falschen Anmeldungen für denselben Namen und 10 von derselben Adresse gibt es für `AUTH_LOCK_MINUTES` (15) Minuten keinen Zugang mehr. Eine Anmeldung mit unbekanntem Namen verhält sich wie eine mit falschem Passwort. Das eigene Konto kann ein Admin nicht sperren, herabstufen oder löschen, und der **letzte aktive Admin** bleibt immer erhalten.
+- **Protokoll:** Anlegen, Rolle, Sperren, Passwort und Löschen werden mit dem handelnden Admin festgehalten (kein Passwort darunter) und nach `AUDIT_RETENTION_DAYS` (365) Tagen gelöscht.
+- **Datenschutz:** Die Datenschutzerklärung beschreibt Konten und das Sitzungs-Cookie automatisch. Das Cookie ist für die Anmeldung unbedingt erforderlich und braucht keinen Banner. Wichtig: Wie beim einfachen Login gehört das **nur zusammen mit HTTPS** in den Betrieb.
+
 ### Impressum und Datenschutz
 
 Unter `/impressum` und `/datenschutz` liegen serverseitig erzeugte Seiten. Die Angaben zum Betreiber stehen bewusst nicht im Repository, sondern in `.env`:
@@ -282,7 +306,7 @@ Der Server komprimiert Texte (Brotli oder gzip), versieht Dateien mit ETag und l
 npm test
 ```
 
-Die Unit-Tests (Normalisierung, Plausibilitätsprüfung, Suchabfrage, Zeitraum-Schnellfilter, HTTP-Header, rechtliche Seiten) brauchen keine Datenbank. `test/server.test.js` startet den echten Server aus dem Build (`npm run build` vorher ausführen, sonst wird der Test übersprungen) und prüft Header, Kompression, Caching, Adressen und Pfadsicherheit. Der Integrationstest `test/import.integration.test.js` prüft den kompletten Importablauf (Neuanlage, Wiederholung ohne Änderung, Änderungshistorie, Entfernung, Wiederherstellung, Abbruch bei zu kleiner Antwort). Er läuft in einem temporären Schema derselben Datenbank und löscht es danach wieder, vorhandene Daten bleiben unberührt. Ist die Datenbank nicht erreichbar, wird er übersprungen.
+Der Integrationstest `test/users.integration.test.js` startet einen echten Server mit Nutzerkonten und prüft Anmeldung, Pflicht-Passwortwechsel, Rollen, Fremdaufrufe, Sperren, Sitzungsablauf und Protokoll. Die Unit-Tests (Normalisierung, Plausibilitätsprüfung, Suchabfrage, Zeitraum-Schnellfilter, HTTP-Header, rechtliche Seiten) brauchen keine Datenbank. `test/server.test.js` startet den echten Server aus dem Build (`npm run build` vorher ausführen, sonst wird der Test übersprungen) und prüft Header, Kompression, Caching, Adressen und Pfadsicherheit. Der Integrationstest `test/import.integration.test.js` prüft den kompletten Importablauf (Neuanlage, Wiederholung ohne Änderung, Änderungshistorie, Entfernung, Wiederherstellung, Abbruch bei zu kleiner Antwort). Er läuft in einem temporären Schema derselben Datenbank und löscht es danach wieder, vorhandene Daten bleiben unberührt. Ist die Datenbank nicht erreichbar, wird er übersprungen.
 
 ## Struktur
 
@@ -300,7 +324,9 @@ Die Unit-Tests (Normalisierung, Plausibilitätsprüfung, Suchabfrage, Zeitraum-S
 - `src/import/guard.js` – Plausibilitätsprüfung der Quellantwort
 - `src/api/server.js` – REST-API, Routing und Auslieferung des Produktionsbuilds
 - `src/api/http.js` – Sicherheits-Header, Kompression, Caching, HTTPS-Umleitung
-- `src/api/auth.js`, `scripts/hash-password.mjs` – optionaler Login für die ganze Seite
+- `src/api/auth.js`, `scripts/hash-password.mjs` – optionaler gemeinsamer Login für die ganze Seite
+- `src/users/` – Nutzerkonten: Regeln (`policy.js`), Datenbank (`store.js`), Fachlogik (`service.js`), HTTP und Seiten (`routes.js`); `scripts/users.mjs` ist der Befehl dazu
+- `src/frontend/UsersPage.jsx`, `ui.jsx` – Nutzerverwaltung, Dialog, Menü, Meldungen, Tabs
 - `scripts/env-sync.mjs` – überträgt neue Variablen aus `.env.example` in die anderen Env-Dateien
 - `src/api/feed.js` – Atom-Feed
 - `Dockerfile`, `docker-compose.yml` – Container für Entwicklung (nur Datenbank) und Betrieb (Profil `app`)

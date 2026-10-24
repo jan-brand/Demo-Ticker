@@ -26,7 +26,7 @@ test('server: headers, legal pages, routing and path safety', { skip: !hasBuild 
       DATABASE_URL: 'postgres://u:p@127.0.0.1:1/none',
       LEGAL_NAME: '', LEGAL_STREET: '', LEGAL_CITY: '', LEGAL_EMAIL: '',
       FORCE_HTTPS: '', TLS_CERT_FILE: '', TLS_KEY_FILE: '',
-      AUTH_ENABLED: '', AUTH_USER: '', AUTH_PASSWORD: '', AUTH_PASSWORD_HASH: '',
+      AUTH_ENABLED: '', AUTH_USER: '', AUTH_PASSWORD: '', AUTH_PASSWORD_HASH: '', USERS_ENABLED: '',
     },
     stdio: ['ignore', 'pipe', 'inherit'],
   });

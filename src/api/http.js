@@ -83,8 +83,8 @@ export async function send(request, response, { status = 200, type, body, header
   response.end(request.method === 'HEAD' ? undefined : payload);
 }
 
-export function sendJson(request, response, status, payload) {
-  return send(request, response, { status, type: TYPES['.json'], body: JSON.stringify(payload), headers: { 'cache-control': 'no-store' } });
+export function sendJson(request, response, status, payload, headers = {}) {
+  return send(request, response, { status, type: TYPES['.json'], body: JSON.stringify(payload), headers: { 'cache-control': 'no-store', ...headers } });
 }
 
 // Built files are read once and kept in memory together with their ETag.

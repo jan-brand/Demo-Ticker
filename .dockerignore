@@ -7,5 +7,6 @@ dist
 data
 logs
 test
-scripts
+scripts/*
+!scripts/users.mjs
 *.log

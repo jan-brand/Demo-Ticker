@@ -9,6 +9,7 @@ import { renderLegalPage, renderNotFound } from '../legal/pages.js';
 import { FEED_QUERY, renderFeed } from './feed.js';
 import { httpsRedirectTarget, isSecure, securityHeaders, send, sendFile, sendJson } from './http.js';
 import { authConfig, clientKey, credentialsValid, FailureLimiter, isPublicPath } from './auth.js';
+import { createUsers } from '../users/routes.js';
 import { buildAssemblySearch, buildMapQuery, MAX_MAP_POINTS } from './query.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -18,6 +19,9 @@ const port = Number(process.env.PORT ?? 3000);
 // Fails at startup (not at the first request) if the login is enabled but incomplete.
 const auth = authConfig();
 const limiter = new FailureLimiter({ maxFailures: auth.maxFailures, lockMinutes: auth.lockMinutes });
+
+// User accounts with a login form replace the single shared password when USERS_ENABLED is set.
+const users = createUsers({ pool, stylesheet: () => stylesheetHref() });
 
 async function handleAssemblyList(request, response, url) {
   const search = buildAssemblySearch(Object.fromEntries(url.searchParams));
@@ -101,11 +105,11 @@ function stylesheetHref() {
 }
 
 const sendHtml = (request, response, status, html) => send(request, response, {
-  status, type: 'text/html; charset=utf-8', body: html, headers: { 'cache-control': 'no-cache' },
+  status, type: 'text/html; charset=utf-8', body: html, headers: { 'cache-control': 'private, no-cache' },
 });
 
 async function handleStatic(request, response, pathname) {
-  const requested = pathname === '/' || /^\/versammlung\/\d+$/.test(pathname) ? 'index.html' : decodeURIComponent(pathname.slice(1));
+  const requested = pathname === '/' || pathname === '/nutzer' || /^\/versammlung\/\d+$/.test(pathname) ? 'index.html' : decodeURIComponent(pathname.slice(1));
   const file = resolve(frontendRoot, requested);
   if (!file.startsWith(`${frontendRoot}${sep}`) || !existsSync(file)) return false;
   await sendFile(request, response, file, { immutable: requested.startsWith('assets/') });
@@ -146,7 +150,14 @@ async function route(request, response) {
   const isRead = request.method === 'GET' || request.method === 'HEAD';
 
   if (url.pathname === '/healthz') return send(request, response, { type: 'text/plain; charset=utf-8', body: 'ok', headers: { 'cache-control': 'no-store' } });
-  if (!(await passesLogin(request, response, url.pathname))) return undefined;
+  let user = null;
+  if (users.enabled) {
+    const result = await users.handle(request, response, url);
+    if (result.handled) return undefined;
+    user = result.user;
+  } else if (!(await passesLogin(request, response, url.pathname))) {
+    return undefined;
+  }
 
   if (url.pathname.startsWith('/api/')) {
     if (!isRead) return sendJson(request, response, 405, { error: 'Method not allowed' });
@@ -158,13 +169,13 @@ async function route(request, response) {
     return sendJson(request, response, 404, { error: 'Not found' });
   }
 
-  if (!isRead) return sendHtml(request, response, 405, renderNotFound({ stylesheet: stylesheetHref() }));
+  if (!isRead) return sendHtml(request, response, 405, renderNotFound({ stylesheet: stylesheetHref(), user }));
   if (url.pathname === '/feed.xml') return handleFeed(request, response);
   if (url.pathname === '/nav.js') return sendFile(request, response, resolve(root, 'src/legal/nav.js')).then(() => undefined);
   const legal = url.pathname.match(/^\/(impressum|datenschutz)\/?$/);
-  if (legal) return sendHtml(request, response, 200, renderLegalPage(legal[1], { stylesheet: stylesheetHref() }));
+  if (legal) return sendHtml(request, response, 200, renderLegalPage(legal[1], { stylesheet: stylesheetHref(), user }));
   if (await handleStatic(request, response, url.pathname)) return undefined;
-  return sendHtml(request, response, 404, renderNotFound({ stylesheet: stylesheetHref() }));
+  return sendHtml(request, response, 404, renderNotFound({ stylesheet: stylesheetHref(), user }));
 }
 
 const handler = async (request, response) => {

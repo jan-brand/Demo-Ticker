@@ -8,6 +8,8 @@ import { Icon } from './Icon.jsx';
 import { MapView } from './MapView.jsx';
 import { isoDate, quickRanges } from './ranges.js';
 import { AppShell } from './Shell.jsx';
+import { ToastProvider } from './ui.jsx';
+import { UsersPage } from './UsersPage.jsx';
 
 const LIST_TITLE = 'Berliner Versammlungen heute und demnächst – Demo-Ticker';
 const PAGE_TITLE = 'Versammlungen und Aufzüge in Berlin';
@@ -24,6 +26,7 @@ function groupByDay(assemblies) {
 }
 
 const defaultFilters = () => ({ q: '', dateFrom: isoDate(new Date()), dateTo: '', plz: '', street: '' });
+const isUsersPath = () => window.location.pathname === '/nutzer';
 const assemblyIdFromPath = () => window.location.pathname.match(/^\/versammlung\/(\d+)$/)?.[1] ?? null;
 const listUrl = (mode) => (mode === 'map' ? '/?ansicht=karte' : '/');
 
@@ -219,6 +222,8 @@ function App() {
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(() => !assemblyIdFromPath());
   const [error, setError] = useState('');
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState(() => (isUsersPath() ? 'users' : 'main'));
 
   const search = async (page = 1, activeFilters = filters, keepError = false) => {
     setLoading(true);
@@ -251,10 +256,16 @@ function App() {
   useEffect(() => {
     const id = assemblyIdFromPath();
     if (id) loadDetail(id); else search();
+    // With user accounts the session tells who is signed in. Without them this answers 404 and no account menu is shown.
+    fetch('/api/session').then(async (response) => {
+      if (response.status === 401) { window.location.assign(`/anmelden?weiter=${encodeURIComponent(window.location.pathname + window.location.search)}`); return null; }
+      return response.ok ? (await response.json()).user : null;
+    }).then(setUser).catch(() => {});
     fetch('/api/import/status').then((response) => (response.ok ? response.json() : null)).then(setImportStatus).catch(() => {});
 
     // Browser back/forward switches between the list and a detail address.
     const onPopState = () => {
+      setPage(isUsersPath() ? 'users' : 'main');
       const current = assemblyIdFromPath();
       if (current) loadDetail(current);
       else setSelected(null);
@@ -269,8 +280,9 @@ function App() {
   }, [selected]);
 
   useEffect(() => {
-    document.title = selected ? `${selected.thema || 'Versammlung'} – Demo-Ticker` : LIST_TITLE;
-  }, [selected]);
+    if (page === 'users') document.title = 'Nutzer – Demo-Ticker';
+    else document.title = selected ? `${selected.thema || 'Versammlung'} – Demo-Ticker` : LIST_TITLE;
+  }, [selected, page]);
 
   const select = async (id) => {
     window.history.pushState({ fromList: true }, '', `/versammlung/${id}`);
@@ -279,7 +291,10 @@ function App() {
 
   const changeMode = (nextMode) => {
     setMode(nextMode);
-    if (selected || assemblyIdFromPath()) {
+    if (page === 'users') {
+      window.history.pushState(null, '', listUrl(nextMode));
+      setPage('main');
+    } else if (selected || assemblyIdFromPath()) {
       window.history.pushState(null, '', listUrl(nextMode));
       setSelected(null);
     } else {
@@ -293,6 +308,21 @@ function App() {
       window.history.replaceState(null, '', listUrl(mode));
       setSelected(null);
     }
+  };
+
+  const selectNav = (id) => {
+    if (id === 'users') {
+      if (page !== 'users') window.history.pushState(null, '', '/nutzer');
+      setSelected(null);
+      setPage('users');
+    } else {
+      changeMode(id);
+    }
+  };
+
+  const logout = async () => {
+    await fetch('/api/session', { method: 'DELETE' }).catch(() => {});
+    window.location.assign('/anmelden');
   };
 
   const applyRange = (range) => {
@@ -310,9 +340,15 @@ function App() {
   const description = importDescription(importStatus);
 
   return (
-    <AppShell areaName={mode === 'map' ? 'Karte' : 'Liste'} activeNav={mode} onSelectNav={changeMode}>
+    <AppShell
+      areaName={page === 'users' ? 'Nutzer' : mode === 'map' ? 'Karte' : 'Liste'}
+      activeNav={page === 'users' ? 'users' : mode}
+      onSelectNav={selectNav}
+      user={user}
+      onLogout={logout}
+    >
       {error && <p className="alert" role="alert"><Icon name="CircleAlert" /><span>{error}</span></p>}
-      {selected ? <Detail assembly={selected} onBack={back} /> : (
+      {page === 'users' ? (user?.role === 'admin' ? <UsersPage me={user} /> : null) : selected ? <Detail assembly={selected} onBack={back} /> : (
         <>
           <PageHead title={PAGE_TITLE} failed={importStatus?.latest?.status === 'failed'}>{description}</PageHead>
           <FilterCard
@@ -354,4 +390,4 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')).render(<ToastProvider><App /></ToastProvider>);

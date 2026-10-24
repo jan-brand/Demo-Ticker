@@ -14,3 +14,15 @@ export const NAV_SECONDARY = [
   { id: 'datenschutz', label: 'Datenschutz', href: '/datenschutz', icon: 'ShieldCheck' },
   { id: 'source', label: 'Datenquelle: Polizei Berlin', href: SOURCE_URL, icon: 'ExternalLink', external: true },
 ];
+
+export const NAV_ADMIN = [{ id: 'users', label: 'Nutzer', href: '/nutzer', icon: 'Users' }];
+export const NAV_ACCOUNT = { id: 'account', label: 'Konto', href: '/konto', icon: 'UserRound' };
+// Visitors who are not signed in only see the pages that stay public.
+export const NAV_LEGAL = NAV_SECONDARY.filter((item) => ['impressum', 'datenschutz'].includes(item.id));
+
+// The sidebar for a given user: signed-in users get the account link, admins the user management.
+export function buildNav(user) {
+  if (!user) return { main: [], secondary: NAV_LEGAL, logout: false };
+  const main = user.role === 'admin' ? [...NAV_MAIN, ...NAV_ADMIN] : [...NAV_MAIN];
+  return { main, secondary: [NAV_ACCOUNT, ...NAV_SECONDARY], logout: true };
+}

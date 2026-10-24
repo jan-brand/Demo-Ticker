@@ -15,6 +15,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY db ./db
 COPY src ./src
+COPY scripts/users.mjs ./scripts/users.mjs
 COPY --from=build /app/dist ./dist
 USER node
 EXPOSE 3000

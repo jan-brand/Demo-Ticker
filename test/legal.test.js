@@ -55,17 +55,46 @@ test('privacy page states the facts and has a valid document skeleton', () => {
 });
 
 test('legal pages use the same shell as the app: sidebar, header, active item, drawer script', () => {
-  const html = renderLegalPage('impressum', { env: complete, stylesheet });
+  const html = renderLegalPage('impressum', { env: complete, stylesheet, user: { username: 'anna', role: 'member' } });
   assert.match(html, /<aside id="sidebar" class="sidebar"/);
   assert.match(html, /<header class="app-header">/);
   assert.match(html, /<p class="header-title">Impressum<\/p>/);
   assert.match(html, /<a class="nav-item" href="\/impressum"[^>]*aria-current="page"/);
   assert.equal((html.match(/aria-current="page"/g) ?? []).length, 1);
-  for (const label of ['Liste', 'Karte', 'Feed (Atom)', 'Impressum', 'Datenschutz', 'Datenquelle: Polizei Berlin']) assert.ok(html.includes(`<span class="nav-label">${label}</span>`), label);
+  for (const label of ['Liste', 'Karte', 'Konto', 'Feed (Atom)', 'Impressum', 'Datenschutz', 'Datenquelle: Polizei Berlin', 'Abmelden']) assert.ok(html.includes(`<span class="nav-label">${label}</span>`), label);
   assert.match(html, /<script type="module" src="\/nav\.js"><\/script>/);
   assert.match(html, /<svg class="icon"/);
   assert.match(html, /aria-label="Menü öffnen"/);
   assert.doesNotMatch(html, /<script>|onclick=|style="/); // content security policy: no inline code or styles
+});
+
+test('visitors who are not signed in only see the public pages in the navigation', () => {
+  const html = renderLegalPage('impressum', { env: complete, stylesheet });
+  assert.ok(!html.includes('<span class="nav-label">Liste</span>'));
+  assert.ok(!html.includes('<span class="nav-label">Abmelden</span>'));
+  assert.ok(html.includes('<span class="nav-label">Impressum</span>') && html.includes('<span class="nav-label">Datenschutz</span>'));
+  assert.doesNotMatch(html, /header-account/);
+});
+
+test('admins see the user management in the navigation, members do not', () => {
+  const admin = renderLegalPage('impressum', { env: complete, stylesheet, user: { username: 'chef', role: 'admin' } });
+  const member = renderLegalPage('impressum', { env: complete, stylesheet, user: { username: 'anna', role: 'member' } });
+  assert.ok(admin.includes('<span class="nav-label">Nutzer</span>'));
+  assert.ok(!member.includes('<span class="nav-label">Nutzer</span>'));
+  assert.match(admin, /aria-label="Konto von chef"/);
+});
+
+test('privacy text follows the login mode', () => {
+  const plain = renderLegalPage('datenschutz', { env: complete, stylesheet });
+  const accounts = renderLegalPage('datenschutz', { env: { ...complete, USERS_ENABLED: '1' }, stylesheet });
+  assert.match(plain, /setzt keine Cookies/);
+  assert.doesNotMatch(plain, /Sitzungs-Cookie/);
+  assert.match(accounts, /Sitzungs-Cookie/);
+  assert.doesNotMatch(accounts, /setzt keine Cookies/);
+  assert.match(accounts, /Nutzerkonten und Anmeldung/);
+  assert.match(accounts, /§ 25 Abs\. 2 Nr\. 2 TDDDG/);
+  const both = renderLegalPage('datenschutz', { env: { ...complete, USERS_ENABLED: '1', AUTH_ENABLED: '1' }, stylesheet });
+  assert.doesNotMatch(both, /HTTP-Authentifizierung/); // shared password is unused when accounts are on
 });
 
 test('unknown page kinds are rejected', () => {

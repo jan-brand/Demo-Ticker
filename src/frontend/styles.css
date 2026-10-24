@@ -355,7 +355,7 @@ a:hover { color: var(--primary-hover); }
   transition: var(--transition-colors);
 }
 .tab:hover { color: var(--text-primary); }
-.tab[aria-pressed="true"] { font-weight: 600; color: var(--text-primary); border-bottom-color: var(--primary); }
+.tab[aria-pressed="true"], .tab[aria-selected="true"] { font-weight: 600; color: var(--text-primary); border-bottom-color: var(--primary); }
 .tab:focus-visible { outline-offset: -2px; border-radius: var(--radius-sm); }
 
 /* ---------- Badges ---------- */
@@ -478,3 +478,73 @@ li:last-child > .row { border-bottom: 0; }
 .skeleton-w-80 { width: 80%; }
 .skeleton-h-18 { height: 18px; }
 .skeleton-block { height: 120px; border-radius: var(--radius-lg); }
+
+/* ---------- Accounts: forms outside the filter card, header account link, sidebar buttons ---------- */
+.stack { display: grid; gap: var(--space-5); }
+.stack > .alert, .stack > .notice { margin-bottom: 0; }
+.form-narrow { max-width: 560px; }
+li > form { margin: 0; }
+button.nav-item { width: 100%; font: inherit; font-weight: 500; cursor: pointer; text-align: left; }
+.header-account { margin-left: auto; }
+.field .text-description { margin-top: 0; }
+.field-row { display: flex; gap: var(--space-2); }
+.field-row .input { flex: 1; }
+@media (max-width: 767px) { .field-row { flex-direction: column; } }
+
+.btn-danger { color: var(--text-inverse); background: var(--error-text); }
+.btn-danger:hover:not(:disabled) { color: var(--text-inverse); opacity: 0.92; }
+
+.select-wrap { position: relative; }
+.select { appearance: none; padding-right: 40px; cursor: pointer; }
+.select-icon { position: absolute; top: 50%; right: var(--space-3); transform: translateY(-50%); color: var(--text-secondary); pointer-events: none; }
+
+/* ---------- Tables ---------- */
+.table-wrap { position: relative; overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.table { width: 100%; border-collapse: collapse; }
+.table thead th {
+  height: 44px; padding: 0 var(--space-4); text-align: left; white-space: nowrap;
+  font-size: 0.75rem; font-weight: 600; line-height: 1.125rem; color: var(--text-secondary);
+  background: var(--background); border-bottom: 1px solid var(--border);
+}
+.table tbody th, .table tbody td {
+  height: 52px; padding: var(--space-2) var(--space-4); text-align: left; vertical-align: middle;
+  font-size: 0.875rem; font-weight: 400; line-height: 1.375rem; border-bottom: 1px solid var(--border-subtle);
+}
+.table tbody tr:last-child th, .table tbody tr:last-child td { border-bottom: 0; }
+.table tbody tr:hover { background: var(--background); }
+.table .cell-name { font-weight: 500; }
+.table .col-actions { width: 1%; text-align: right; white-space: nowrap; }
+.cell-badge { margin-left: var(--space-2); }
+
+/* ---------- Dialog ---------- */
+.modal { width: 480px; max-width: calc(100vw - 32px); padding: 0; color: var(--text-primary); background: var(--surface); border: 0; border-radius: var(--radius-xl); box-shadow: var(--shadow-overlay); }
+.modal::backdrop { background: var(--overlay); }
+.modal[open] { animation: modal-in var(--transition-overlay); }
+@keyframes modal-in { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: none; } }
+.modal-body { display: grid; padding: var(--space-6); }
+.modal-description { margin-top: var(--space-2); color: var(--text-secondary); }
+.modal-form { margin-top: var(--space-5); }
+.modal-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-6); }
+@media (max-width: 767px) { .modal-actions { flex-direction: column-reverse; } .modal-actions .btn { width: 100%; } }
+
+/* ---------- Dropdown ---------- */
+.dropdown { position: fixed; z-index: 70; min-width: 180px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-dropdown); box-shadow: var(--shadow-overlay); animation: dropdown-in var(--transition-fast); }
+@keyframes dropdown-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.dropdown-item { display: flex; align-items: center; gap: var(--space-2); width: 100%; height: 36px; padding: 0 var(--space-3); font-size: 0.875rem; line-height: 1.25rem; text-align: left; color: var(--text-primary); background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer; transition: var(--transition-colors); }
+.dropdown-item .icon { color: var(--text-secondary); }
+.dropdown-item:hover, .dropdown-item:focus-visible { background: var(--surface-hover); }
+.dropdown-item:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; background: var(--surface-secondary); }
+.dropdown-item:disabled { color: var(--text-disabled); cursor: not-allowed; }
+.dropdown-item.is-danger, .dropdown-item.is-danger .icon { color: var(--error-text); }
+
+/* ---------- Toasts ---------- */
+.toast-region { position: fixed; top: var(--space-6); right: var(--space-6); z-index: 80; display: grid; gap: var(--space-3); width: 320px; max-width: calc(100vw - 32px); pointer-events: none; }
+.toast { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-4); pointer-events: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-dropdown); box-shadow: var(--shadow-sm); animation: toast-in var(--transition-default); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.toast-icon { margin-top: 3px; color: var(--text-secondary); }
+.toast-error .toast-icon, .toast-error .toast-title { color: var(--error-text); }
+.toast-text { flex: 1; min-width: 0; }
+.toast-title { font-size: 0.875rem; font-weight: 600; line-height: 1.375rem; overflow-wrap: anywhere; }
+.toast-description { font-size: 0.8125rem; line-height: 1.25rem; color: var(--text-secondary); overflow-wrap: anywhere; }
+.toast-close { width: 32px; height: 32px; margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0 0; }
+@media (max-width: 767px) { .toast-region { top: var(--space-4); right: var(--space-4); } }
