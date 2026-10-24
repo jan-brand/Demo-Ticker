@@ -41,7 +41,7 @@ export function buildAssemblySearch(query = {}) {
     text: `SELECT id, datum, von, bis, thema, plz, strasse_nr AS "strasseNr",
                   aufzugsstrecke, is_recurring AS "isRecurring",
                   recurring_start AS "recurringStart", recurring_end AS "recurringEnd",
-                  lat, lon
+                  lat, lon, removed_at AS "removedAt"
              FROM assemblies
              ${where}
             ORDER BY datum ASC NULLS LAST, von ASC NULLS LAST, id ASC
