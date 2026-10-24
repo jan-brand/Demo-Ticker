@@ -144,6 +144,7 @@
     --focus-field: rgba(108, 199, 186, 0.30);
     --scrollbar-thumb: #2b4650;
     --accent-sage-light: #2b4650;
+    --accent-sage: #3d5a65;
     --skeleton-base: #17303a;
     --skeleton-highlight: #20373f;
   }
@@ -567,3 +568,22 @@ button.nav-item { width: 100%; font: inherit; font-weight: 500; cursor: pointer;
 .location-block { display: grid; gap: var(--space-4); justify-items: start; }
 .location-block p { margin: 0; }
 .location-frame { width: 100%; max-width: 560px; }
+
+/* ---------- Map layers: Ortsteil boundaries, major roads, their names, legend ---------- */
+.map-ortsteil { fill: none; stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linejoin: round; pointer-events: none; }
+.map-ortsteil.is-active { fill: var(--accent-sage); stroke: var(--text-secondary); }
+.map-road { fill: none; stroke: var(--text-disabled); stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; pointer-events: none; }
+.map-road-motorway { stroke-width: 2.4; }
+.map-road-trunk { stroke-width: 1.8; }
+.map-road-primary { stroke-width: 1.2; }
+.map-ortsteil-label.is-active { font-weight: 600; fill: var(--text-primary); }
+.map-road-label { fill: var(--text-primary); font-weight: 500; }
+.map-road-label.is-motorway { font-weight: 700; }
+.location-map-large .map-ortsteil { stroke-width: 0.8; }
+.map-legend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: var(--space-3) 0 0; padding: 0; list-style: none; }
+.map-legend li { display: inline-flex; align-items: center; gap: var(--space-2); }
+.legend-line { stroke-linecap: round; fill: none; }
+.legend-district { stroke: var(--border-hover); stroke-width: 1.5; }
+.legend-ortsteil { stroke: var(--border); stroke-width: 1.2; }
+.legend-motorway { stroke: var(--text-disabled); stroke-width: 2.4; }
+.legend-road { stroke: var(--text-disabled); stroke-width: 1.2; }

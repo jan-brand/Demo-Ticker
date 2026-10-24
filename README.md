@@ -104,6 +104,8 @@ Die Oberfläche folgt dem Designsystem „Modern Vintage Minimalism“ (warme Cr
 
 Die Ansicht „Karte“ zeigt die Versammlungen des aktuellen Filters auf einer Berlin-Karte (Markierungen, Cluster mit Anzahl, Zoom per Buttons, Mausrad und Ziehen, Tastaturbedienung). Die Karte ist selbst als SVG gezeichnet: Die Bezirksgrenzen liegen als kleine Datei im Frontend (`src/frontend/berlin-map.js`, 17 KB), es werden **keine Kartenkacheln und keine Dienste Dritter** aus dem Browser geladen. Die Listenansicht bleibt die vollständige Alternative.
 
+**Ortsteile und Hauptstraßen:** Auf der großen Karte und der Lagekarte der Detailseite sind zusätzlich die 97 Ortsteilgrenzen und die Autobahnen, Fernstraßen und Hauptstraßen eingezeichnet, mit Zeichenerklärung. Beim Hineinzoomen erscheinen erst die Namen der wichtigsten Straßen, dann die Ortsteilnamen; auf der Detailseite steht der Ortsteil und der Bezirk der Versammlung. Diese Daten (rund 21 KB komprimiert) werden erst geladen, wenn die Karte oder eine Detailseite geöffnet wird, die Startseite bleibt unverändert klein. Quellen und Lizenzen: Ortsteile aus „ALKIS Berlin Ortsteile“ (Geoportal Berlin, Datenlizenz Deutschland – Zero 2.0); Straßen aus OpenStreetMap, © OpenStreetMap-Mitwirkende, **ODbL**. Die erzeugte Datei `src/frontend/berlin-details.js` enthält damit abgeleitete OpenStreetMap-Daten und steht für diesen Teil unter der ODbL; die Quellenangabe steht unter der Karte und im Impressum.
+
 Jeder Eintrag zeigt außerdem, wo er liegt: In der Liste als kleine Berlin-Karte mit hervorgehobenem Bezirk und Markierung (Einträge ohne bekannten Ort haben keine), auf der Detailseite als größere Karte „Lage“ mit dem Bezirksnamen. Für die Straßenansicht gibt es dort einen Link zu OpenStreetMap, der erst nach einem Klick geöffnet wird. Den Bezirk bestimmt die Anwendung selbst aus den vorhandenen Grenzen (`districtAt` in `src/frontend/mapgeo.js`).
 
 Die Quelle liefert keine Koordinaten. Der **Server** ermittelt sie aus Straße, Hausnummer und PLZ über den Geocoder Nominatim (OpenStreetMap). Übermittelt werden nur die öffentlich bekannten Adressen, keine Daten von Besucherinnen und Besuchern. Das passiert automatisch nach jedem Import für neue Einträge (höchstens `GEOCODE_BATCH`, Standard 100, pro Lauf; eine Anfrage pro Sekunde, wie es die Nutzungsregeln verlangen). Das Ergebnis wird gespeichert, jede Adresse wird also nur einmal angefragt.
@@ -117,7 +119,7 @@ npm run geocode     # nur Ortsbestimmung, alle offenen Einträge (beim ersten Ma
 - Ergebnisse außerhalb von Berlin werden verworfen (gleichnamige Straßen in anderen Städten). Einträge ohne Straße und ohne Strecke oder ohne Treffer erscheinen nicht auf der Karte; die Seite nennt, wie viele es sind. Bahnhöfe („S-Bhf. Zehlendorf“) werden als „Bahnhof …“ gesucht, Zusätze wie „ggü“ abgeschnitten. Bei **Aufzügen ohne Adresse** wird der Startpunkt der Strecke verwendet, die Markierung zeigt dann die Straße ohne Hausnummer. Nicht gefundene Einträge werden nach `GEOCODER_RETRY_DAYS` (7) erneut versucht.
 - Abschalten: `GEOCODING=off` in `.env`. Eigener Geocoder: `GEOCODER_URL`. Kontaktangabe für den User-Agent (die Nominatim-Regeln empfehlen sie): `GEOCODER_CONTACT` in `.env`; sie wird nur gesendet, wenn du sie selbst einträgst.
 - Namensnennung: Die Seite nennt unter der Karte und im Impressum „© OpenStreetMap-Mitwirkende (ODbL)“ sowie die Herkunft der Bezirksgrenzen. Die Bezirksgrenzen stammen aus dem Datensatz „ALKIS Berlin Bezirke“ des Geoportals Berlin, veröffentlicht unter der Datenlizenz Deutschland – Zero – Version 2.0 (keine Namensnennungspflicht, die Angabe erfolgt freiwillig).
-- Die Grenzen lassen sich neu erzeugen: `node scripts/build-berlin-map.mjs [GeoJSON-Datei oder URL]`.
+- Die Bezirksgrenzen lassen sich neu erzeugen: `node scripts/build-berlin-map.mjs [GeoJSON-Datei oder URL]`; Ortsteile und Straßen mit `node scripts/build-berlin-details.mjs [--ortsteile Datei-oder-URL] [--roads Datei-oder-URL]` (ohne Angaben werden die Daten live abgerufen, der Overpass-Dienst ist manchmal ausgelastet, das Skript versucht es mehrfach).
 
 ## Datenbank einrichten
 
@@ -325,7 +327,8 @@ Der Integrationstest `test/users.integration.test.js` startet einen echten Serve
 - `src/frontend/MapView.jsx`, `LocationMap.jsx`, `mapgeo.js`, `berlin-map.js` – Kartenansicht (SVG), kleine Lagekarten je Eintrag und Rechenkern (Projektion, Cluster, Bezirkszuordnung)
 - `src/frontend/Shell.jsx`, `Icon.jsx`, `history.js` – Rahmen mit Sidebar und Drawer, Icons, lesbare Änderungshistorie
 - `src/shared/nav.js`, `src/legal/nav.js`, `src/legal/icons.js` – gemeinsame Navigation, Drawer-Skript und Icons für die serverseitigen Seiten
-- `scripts/build-berlin-map.mjs` – erzeugt die vereinfachten Bezirksgrenzen
+- `scripts/build-berlin-map.mjs`, `scripts/build-berlin-details.mjs` – erzeugen die vereinfachten Bezirksgrenzen, Ortsteile und Hauptstraßen
+- `src/frontend/DetailLayers.jsx`, `details.js`, `berlin-details.js` – Ortsteil- und Straßenebenen, Ortsteilzuordnung, bei Bedarf geladene Daten
 - `src/import/guard.js` – Plausibilitätsprüfung der Quellantwort
 - `src/api/server.js` – REST-API, Routing und Auslieferung des Produktionsbuilds
 - `src/api/http.js` – Sicherheits-Header, Kompression, Caching, HTTPS-Umleitung

@@ -7,6 +7,7 @@ import { describeChange } from './history.js';
 import { Icon } from './Icon.jsx';
 import { LocationMap, MapDefs } from './LocationMap.jsx';
 import { MapView } from './MapView.jsx';
+import { ortsteilAt, useBerlinDetails } from './details.js';
 import { districtAt, osmUrl } from './mapgeo.js';
 import { isoDate, quickRanges } from './ranges.js';
 import { AppShell } from './Shell.jsx';
@@ -167,6 +168,7 @@ function EmptyState({ onReset }) {
 }
 
 function LocationCard({ assembly }) {
+  const details = useBerlinDetails();
   if (!hasPosition(assembly)) {
     return (
       <section className="card">
@@ -178,6 +180,7 @@ function LocationCard({ assembly }) {
   const lat = Number(assembly.lat);
   const lon = Number(assembly.lon);
   const district = districtAt(lat, lon);
+  const ortsteil = ortsteilAt(details, lat, lon);
   // Marches without an address are placed at the start of their route (see the geocoding in the README).
   const fromRoute = !assembly.strasseNr && assembly.aufzugsstrecke;
   return (
@@ -186,7 +189,7 @@ function LocationCard({ assembly }) {
       <div className="location-block">
         <div className="map-frame location-frame"><LocationMap lat={lat} lon={lon} size="large" /></div>
         <p className="text-description">
-          {district ? `Bezirk ${district.name}. ` : ''}
+          {[ortsteil && `Ortsteil ${ortsteil.name}`, district && `Bezirk ${district.name}`].filter(Boolean).join(', ')}{district ? '. ' : ''}
           {fromRoute ? 'Die Markierung zeigt den Start der Strecke, die Hausnummer ist nicht bekannt.' : 'Die Position wurde aus der Adresse ermittelt.'}
         </p>
         <p><a className="btn btn-secondary" href={osmUrl(lat, lon)} rel="noopener noreferrer"><Icon name="ExternalLink" />In OpenStreetMap ansehen</a></p>

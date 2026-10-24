@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { formatDay, formatTime } from './format.js';
+import { DetailLayers, MapLegend } from './DetailLayers.jsx';
+import { useBerlinDetails } from './details.js';
 import { Icon } from './Icon.jsx';
 import { centerView, clampView, clusterPoints, FULL_VIEW, MAP, toPoint, zoomView } from './mapgeo.js';
 
@@ -29,6 +31,7 @@ function useMapData(filters) {
 
 export function MapView({ filters, onSelect, onReset }) {
   const data = useMapData(filters);
+  const details = useBerlinDetails();
   const svgRef = useRef(null);
   const drag = useRef(null);
   const moved = useRef(false);
@@ -130,7 +133,8 @@ export function MapView({ filters, onSelect, onReset }) {
           {MAP.districts.map((district) => (
             <path key={district.name} className="map-district" d={district.d} />
           ))}
-          {(widthPx >= 520 || zoomed) && MAP.districts.map((district) => (
+          <DetailLayers details={details} zoomWidth={view.w} unit={unit} />
+          {(widthPx >= 520 || zoomed) && view.w > 260 && MAP.districts.map((district) => (
             <text key={district.name} className="map-label" x={district.labelX} y={district.labelY} fontSize={11 * unit} textAnchor="middle">{district.name}</text>
           ))}
           {clusters.map((cluster) => {
@@ -159,6 +163,8 @@ export function MapView({ filters, onSelect, onReset }) {
         </div>
         {data.status === 'loading' && <p className="map-overlay text-meta" role="status">Lade Karte …</p>}
       </div>
+
+      {details && <MapLegend />}
 
       <div className="map-status text-description" role="status">
         {data.status === 'loading' && <span className="skeleton skeleton-w-40" aria-hidden="true" />}
@@ -207,7 +213,7 @@ export function MapView({ filters, onSelect, onReset }) {
       </div>
 
       <p className="map-credit text-meta">
-        Bezirksgrenzen: Geoportal Berlin / ALKIS Berlin Bezirke (dl-zero-de/2.0). Positionen aus den Adressen mit Nominatim ermittelt, © OpenStreetMap-Mitwirkende (ODbL).
+        Bezirks- und Ortsteilgrenzen: Geoportal Berlin / ALKIS (dl-zero-de/2.0). Autobahnen, Hauptstraßen und Positionen aus den Adressen mit Nominatim ermittelt, © OpenStreetMap-Mitwirkende (ODbL).
         Die Karte lädt keine Kacheln von Dritten.
       </p>
     </section>

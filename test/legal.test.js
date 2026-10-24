@@ -31,6 +31,8 @@ test('complete details produce a page without warning', () => {
   assert.match(html, /Erika Mustermann/);
   assert.match(html, /mailto:kontakt@example\.org/);
   assert.match(html, /§ 5 DDG/);
+  assert.match(html, /ALKIS Berlin Ortsteile/);
+  assert.match(html, /Autobahnen und Hauptstraßen/);
 });
 
 test('operator input is escaped', () => {
