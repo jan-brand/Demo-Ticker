@@ -122,6 +122,18 @@ Die Standardwerte passen zur `docker-compose.yml`, es muss nichts geändert werd
 DATABASE_URL=postgres://demo_ticker:demo_ticker@localhost:5432/demo_ticker
 ```
 
+#### Neue Einstellungen aus `.env.example` übernehmen
+
+Kommen mit einem Update neue Variablen in `.env.example` dazu, trägt dieser Befehl sie in alle vorhandenen Env-Dateien (`.env`, `.env.local`, `.env.production` …) nach:
+
+```powershell
+npm run env:sync -- --dry-run    # zeigt nur, was ergänzt würde
+npm run env:sync                 # ergänzt es
+npm run env:sync -- .env.production   # nur bestimmte Dateien
+```
+
+Vorhandene Werte werden nie geändert. Neue Variablen landen am Ende der Datei in einem Block „aus .env.example übernommen“, samt ihren Erklärungen; was im Beispiel auskommentiert ist, bleibt auch in der Zieldatei auskommentiert und ist damit wirkungslos, bis du es aktivierst. Eine Variable, die in der Datei schon vorkommt, auch auskommentiert, wird nicht erneut angeboten. Ein zweiter Lauf ändert nichts mehr.
+
 ### 2. PostgreSQL starten
 
 Docker Desktop muss laufen (siehe oben).
@@ -277,6 +289,7 @@ Die Unit-Tests (Normalisierung, Plausibilitätsprüfung, Suchabfrage, Zeitraum-S
 - `src/api/server.js` – REST-API, Routing und Auslieferung des Produktionsbuilds
 - `src/api/http.js` – Sicherheits-Header, Kompression, Caching, HTTPS-Umleitung
 - `src/api/auth.js`, `scripts/hash-password.mjs` – optionaler Login für die ganze Seite
+- `scripts/env-sync.mjs` – überträgt neue Variablen aus `.env.example` in die anderen Env-Dateien
 - `src/api/feed.js` – Atom-Feed
 - `Dockerfile`, `docker-compose.yml` – Container für Entwicklung (nur Datenbank) und Betrieb (Profil `app`)
 - `scripts/install-import-task.ps1` – Windows-Aufgabe für den regelmäßigen Import

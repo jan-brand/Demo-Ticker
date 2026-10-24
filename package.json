@@ -10,6 +10,7 @@
     "update": "node src/jobs/update.js",
     "geocode": "node src/jobs/geocode.js",
     "auth:hash": "node scripts/hash-password.mjs",
+    "env:sync": "node scripts/env-sync.mjs",
     "import:schedule": "node src/jobs/scheduler.js",
     "db:migrate": "node src/db/migrate.js",
     "dev": "node scripts/dev.js",
