@@ -104,7 +104,7 @@ export function diffAssembly(previous, current) {
 
 export function extractEntries(payload) {
   if (Array.isArray(payload)) return payload;
-  for (const key of ['data', 'results', 'items', 'versammlungen', 'assemblies']) {
+  for (const key of ['index', 'data', 'results', 'items', 'versammlungen', 'assemblies']) {
     if (Array.isArray(payload?.[key])) return payload[key];
   }
   throw new Error('API response does not contain an assembly array');

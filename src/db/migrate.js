@@ -1,12 +1,16 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { pool } from './pool.js';
 
-const migrationPath = fileURLToPath(new URL('../../db/001_initial.sql', import.meta.url));
+const migrationDir = fileURLToPath(new URL('../../db/', import.meta.url));
 
 try {
-  await pool.query(await readFile(path.resolve(migrationPath), 'utf8'));
+  const files = (await readdir(migrationDir)).filter((name) => /^\d+_.*\.sql$/.test(name)).sort();
+  for (const file of files) {
+    await pool.query(await readFile(path.join(migrationDir, file), 'utf8'));
+    console.log(`Applied ${file}`);
+  }
   console.log('Database schema is up to date.');
 } finally {
   await pool.end();
